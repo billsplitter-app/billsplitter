@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bill Splitter record</title>
+<style>
+body{margin:0;background:#1a1a1a;color:#f5ecd7;font-family:-apple-system,Helvetica,sans-serif}
+.card{max-width:640px;margin:24px auto;padding:24px;background:#262626;border-radius:14px}
+h1{font-family:Georgia,serif;color:#ffd37e;text-align:center;margin-top:0}
+pre{white-space:pre-wrap;font:16px/1.5 -apple-system,Helvetica,sans-serif}
+.warn{background:#5a1a12;color:#fff;border:1px solid #ff8a70;border-radius:10px;padding:12px 14px;font-weight:600;margin-bottom:18px}
+.note{color:#aaa;font-size:13px;text-align:center}
+</style></head><body><div class="card">
+<h1>Bill Splitter</h1>
+<div class="warn" id="w" style="display:none">To keep this record, take a screenshot now (press the side button and volume up together). For your privacy, it is not saved and will disappear if you refresh or leave this page.</div>
+<pre id="r">No record to show. For privacy, records are not saved. If you need it again, please scan the QR code again.</pre>
+<p class="note">This record is read only from the link on your phone. Nothing is sent or stored online, and it is removed from your browser history straight away.</p>
+</div><script>
+try{var h=location.hash.slice(1);
+if(h){
+ history.replaceState(null,'',location.pathname);
+ h=h.replace(/-/g,'+').replace(/_/g,'/');while(h.length%4)h+='=';
+ var b=atob(h),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);
+ document.getElementById('r').textContent=new TextDecoder().decode(u);
+ document.getElementById('w').style.display='block';
+}}catch(e){}
+</script></body></html>
