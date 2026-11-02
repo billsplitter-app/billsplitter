@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Join the bill – Bill Splitter</title>
+<style>
+  body { margin:0; font-family:-apple-system,Helvetica,Arial,sans-serif; background:#1a1410; color:#f3e6c8; }
+  .wrap { max-width:480px; margin:0 auto; padding:28px 20px 60px; }
+  h1 { font-family:Georgia,serif; color:#e8c46a; text-align:center; font-size:34px; margin:8px 0 4px; }
+  .sub { text-align:center; color:#c9b48a; margin-bottom:26px; }
+  label { display:block; margin:18px 0 6px; font-weight:600; }
+  input[type=text], input[type=tel], input[type=email], select {
+    width:100%; box-sizing:border-box; padding:13px; font-size:17px;
+    border-radius:10px; border:1px solid #8a6d35; background:#fffbe8; color:#222; }
+  .tick { display:flex; align-items:center; gap:12px; margin-top:22px; font-size:17px; }
+  .tick input { width:26px; height:26px; }
+  button { width:100%; margin-top:30px; padding:15px; font-size:18px; font-weight:700;
+    border:none; border-radius:12px; background:#e8c46a; color:#1a1410; }
+  button:disabled { opacity:.5; }
+  .msg { margin-top:22px; padding:14px; border-radius:10px; text-align:center; }
+  .ok { background:#1f4d2b; color:#d8f5df; }
+  .err { background:#5a1a14; color:#ffd9d4; }
+  .note { margin-top:30px; font-size:14px; color:#b8a57d; line-height:1.5; }
+  .note a { color:#e8c46a; }
+  #newGroupBox { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Bill Splitter</h1>
+  <div class="sub">Add yourself to the bill</div>
+
+  <div id="bad" class="msg err" style="display:none">
+    This invite link is incomplete or has expired. Please ask the organiser to show the QR code again.
+  </div>
+
+  <form id="form" style="display:none" autocomplete="on">
+    <label for="name">Your name</label>
+    <input id="name" name="name" type="text" autocomplete="name" required maxlength="60">
+
+    <label for="mobile">Mobile (optional)</label>
+    <input id="mobile" name="mobile" type="tel" autocomplete="tel" maxlength="30">
+
+    <label for="email">Email (optional)</label>
+    <input id="email" name="email" type="email" autocomplete="email" maxlength="100">
+
+    <label for="group">Your group</label>
+    <select id="group"></select>
+
+    <div id="newGroupBox">
+      <label for="newGroup">Name of your new group</label>
+      <input id="newGroup" type="text" maxlength="60" placeholder="e.g. The Browns, or just your name">
+    </div>
+
+    <label class="tick"><input id="drinks" type="checkbox"> I'm having drinks</label>
+
+    <button id="send" type="submit">Send to organiser</button>
+  </form>
+
+  <div id="result" class="msg" style="display:none"></div>
+
+  <div class="note">
+    Your details are scrambled on this phone before they are sent, so only the organiser's app can read them.
+    The scrambled copy is deleted automatically within 30 minutes.
+    <a href="privacy.html">Privacy policy</a>
+  </div>
+</div>
+
+<script>
+const WORKER = "https://billsplitter-invites.billsplitter.workers.dev";
+
+function fromB64url(s) {
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+function toB64url(bytes) {
+  let s = "";
+  bytes.forEach(b => s += String.fromCharCode(b));
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+let invite = null;
+try {
+  const raw = location.hash.slice(1);
+  invite = JSON.parse(new TextDecoder().decode(fromB64url(raw)));
+  if (!invite.i || !invite.k) invite = null;
+} catch (e) { invite = null; }
+
+if (!invite) {
+  document.getElementById("bad").style.display = "block";
+} else {
+  history.replaceState(null, "", location.pathname);
+  const sel = document.getElementById("group");
+  (invite.g || []).forEach(name => {
+    const o = document.createElement("option");
+    o.value = name; o.textContent = name; sel.appendChild(o);
+  });
+  const o = document.createElement("option");
+  o.value = "__new__"; o.textContent = "New group / just me";
+  sel.appendChild(o);
+  const toggle = () => document.getElementById("newGroupBox").style.display =
+    sel.value === "__new__" ? "block" : "none";
+  sel.addEventListener("change", toggle); toggle();
+  document.getElementById("form").style.display = "block";
+}
+
+document.getElementById("form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const btn = document.getElementById("send");
+  const result = document.getElementById("result");
+  btn.disabled = true; btn.textContent = "Sending…";
+  try {
+    const sel = document.getElementById("group").value;
+    const details = {
+      name: document.getElementById("name").value.trim(),
+      mobile: document.getElementById("mobile").value.trim(),
+      email: document.getElementById("email").value.trim(),
+      group: sel === "__new__" ? "" : sel,
+      newGroup: sel === "__new__" ? document.getElementById("newGroup").value.trim() : "",
+      drinks: document.getElementById("drinks").checked
+    };
+    if (!details.name) throw new Error("Please enter your name.");
+
+    const key = await crypto.subtle.importKey("raw", fromB64url(invite.k), "AES-GCM", false, ["encrypt"]);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const sealed = new Uint8Array(await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(details))));
+    const box = new Uint8Array(iv.length + sealed.length);
+    box.set(iv); box.set(sealed, iv.length);
+
+    const res = await fetch(WORKER + "/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: invite.i, box: toB64url(box) })
+    });
+    if (!res.ok) throw new Error(res.status === 429
+      ? "This invite is full. Please ask the organiser."
+      : "Couldn't send. Please try again.");
+
+    document.getElementById("form").style.display = "none";
+    result.className = "msg ok";
+    result.textContent = "Done! You've been added. You can close this page.";
+    result.style.display = "block";
+  } catch (e) {
+    result.className = "msg err";
+    result.textContent = e.message || "Something went wrong.";
+    result.style.display = "block";
+    btn.disabled = false; btn.textContent = "Send to organiser";
+  }
+});
+</script>
+</body>
+</html>
