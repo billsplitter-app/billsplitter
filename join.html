@@ -12,7 +12,7 @@
   .sub { text-align:center; color:#c9b48a; margin-bottom:26px; }
   .hint { color:#c9b48a; font-size:14px; line-height:1.4; }
   label { display:block; margin:18px 0 6px; font-weight:600; }
-  input[type=text], input[type=tel], input[type=email], input[type=number], select {
+  input[type=text], input[type=tel], input[type=email], input[type=number] {
     width:100%; box-sizing:border-box; padding:13px; font-size:17px;
     border-radius:10px; border:1px solid #8a6d35; background:#fffbe8; color:#222; }
   .tick { display:flex; align-items:center; gap:12px; margin-top:16px; font-size:17px; font-weight:400; }
@@ -23,6 +23,9 @@
   button.ghost { width:auto; margin-top:12px; padding:9px 14px; font-size:15px; font-weight:600;
     background:transparent; color:#e8c46a; border:1px solid #8a6d35; }
   button.x { width:44px; margin:0; padding:0; font-size:22px; background:transparent; color:#ff8a70; }
+  .nameRow { display:flex; gap:10px; align-items:center; margin-top:10px; }
+  .num { flex:0 0 28px; color:#c9b48a; font-variant-numeric:tabular-nums; }
+  .me { font-size:17px; padding:13px 0; }
   .person { margin-top:18px; padding:4px 16px 18px; border:1px solid #5c4724; border-radius:14px; background:#241b14; }
   .who { margin-top:14px; font-size:18px; font-weight:700; color:#e8c46a; }
   .items { margin-top:18px; }
@@ -37,7 +40,6 @@
   .err { background:#5a1a14; color:#ffd9d4; }
   .note { margin-top:30px; font-size:14px; color:#b8a57d; line-height:1.5; }
   .note a { color:#e8c46a; }
-  #newGroupBox { display:none; }
 </style>
 </head>
 <body>
@@ -66,18 +68,17 @@
     </div>
     <div class="hint" style="margin-top:12px">If you don't want to provide a phone number or email address, you can scan a QR code on the organiser's phone to obtain your report.</div>
 
-    <label for="group">Your group</label>
-    <select id="group"></select>
-
-    <div id="newGroupBox">
-      <label for="newGroup">Name of your group</label>
-      <input id="newGroup" type="text" maxlength="60" placeholder="e.g. The Browns, or just your name">
+    <h2>Who you are paying for</h2>
+    <div class="hint">You are number 1. Add the first name of each other person you are paying for. A new line appears as you fill each one. To remove someone, clear their name.</div>
+    <div id="names">
+      <div class="nameRow"><span class="num">1.</span><div class="me" id="meName">You</div></div>
     </div>
 
-    <h2>Who you are paying for</h2>
-    <div class="hint" id="peopleHint">Include yourself first, then add everyone else you are paying for.</div>
+    <div id="detailsTitle">
+      <h2>Each person's details</h2>
+      <div class="hint" id="detailsHint"></div>
+    </div>
     <div id="people"></div>
-    <button type="button" class="ghost" id="addPerson">+ Add another person</button>
 
     <button id="send" type="submit">Send to organiser</button>
   </form>
@@ -115,9 +116,14 @@ try {
 // The organiser's bill splitting approach decides which questions are asked
 const FOOD = !!(invite && invite.f);           // Detailed food: special food items
 const DRINKS = (invite && invite.d) || 0;      // 0 none, 1 Drinker ticks, 2 ticks and special drink items
-let cardCount = 0;
+const ASKS = FOOD || DRINKS >= 1;              // any questions for each person at all
 
-// Amount and description boxes, with Add or Replace once an item is entered
+// Each person: their name box (none for the leader) and their details card
+const entries = [];
+function leaderName() { return document.getElementById("name").value.trim(); }
+function nameOf(e) { return e.input ? e.input.value.trim() : leaderName(); }
+
+// The same questions as the app: Add or Replace, then amount and description lines
 function itemsBlock(kind, n) {
   const bill = kind === "food" ? "food" : "drinks";
   const title = kind === "food" ? "Special food items (optional)" : "Special drink items (optional)";
@@ -125,12 +131,14 @@ function itemsBlock(kind, n) {
   return '<div class="items ' + kind + '" data-eg="' + eg + '">' +
     '<div class="itemsTitle">' + title + '</div>' +
     '<div class="hint">Only for something different from the rest of the table, such as an extra course or an expensive drink.</div>' +
+    '<div class="choice">' +
+      '<label class="tick"><input type="radio" name="' + kind + n + '" value="add"> ' +
+        (kind === "food" ? "Add special food item to the average food bill? OR" : "Add special drink item to the average drinks bill? OR") + '</label>' +
+      '<label class="tick"><input type="radio" name="' + kind + n + '" value="replace" checked> ' +
+        (kind === "food" ? "Replace the average food bill with your food item?" : "Replace the average drinks bill with your drink item?") + '</label>' +
+    '</div>' +
     '<div class="rows"></div>' +
-    '<button type="button" class="ghost addItem">+ Add an item</button>' +
-    '<div class="choice" style="display:none">' +
-      '<label class="tick"><input type="radio" name="' + kind + n + '" value="add"> Add to the average ' + bill + ' bill</label>' +
-      '<label class="tick"><input type="radio" name="' + kind + n + '" value="replace" checked> Replace the average ' + bill + ' bill</label>' +
-    '</div></div>';
+    '</div>';
 }
 
 function addItemRow(block) {
@@ -138,42 +146,63 @@ function addItemRow(block) {
   row.className = "row";
   row.innerHTML = '<span class="dollar">$</span>' +
     '<input type="number" inputmode="decimal" step="0.01" min="0" class="amt" placeholder="Amount">' +
-    '<input type="text" class="desc" maxlength="40">' +
-    '<button type="button" class="x" aria-label="Remove item">×</button>';
+    '<input type="text" class="desc" maxlength="40">';
   row.querySelector(".desc").placeholder = block.dataset.eg;
-  row.querySelector(".x").addEventListener("click", () => { row.remove(); showChoice(block); });
+  const amt = row.querySelector(".amt");
+  // A new empty line appears once the last one has an amount, as in the app
+  amt.addEventListener("input", () => {
+    const rows = block.querySelectorAll(".row");
+    if (row === rows[rows.length - 1] && parseFloat(amt.value) > 0) addItemRow(block);
+  });
   block.querySelector(".rows").appendChild(row);
-  showChoice(block);
 }
 
-function showChoice(block) {
-  block.querySelector(".choice").style.display = block.querySelector(".row") ? "block" : "none";
-}
-
-// One card per person; the first card is the group leader
-function addPerson(isLeader) {
-  const n = ++cardCount;
+// The details card for person n, with the questions that match the approach
+function makeCard(n) {
   const card = document.createElement("div");
   card.className = "person";
-  let html = isLeader
-    ? '<div class="who">You</div>'
-    : '<label>First name</label><input type="text" class="pname" maxlength="60" autocapitalize="words">';
-  if (DRINKS >= 1) html += '<label class="tick"><input type="checkbox" class="pdrink"> Drinker</label>';
+  let html = '<div class="who"></div>';
+  if (DRINKS >= 1) html += '<label class="tick"><input type="checkbox" class="pdrink"> Drinker?</label>';
   if (FOOD) html += itemsBlock("food", n);
   if (DRINKS === 2) html += '<div class="drinkBox" style="display:none">' + itemsBlock("drink", n) + '</div>';
-  if (!isLeader) html += '<button type="button" class="ghost remove">Remove this person</button>';
   card.innerHTML = html;
-  card.querySelectorAll(".items").forEach(block =>
-    block.querySelector(".addItem").addEventListener("click", () => addItemRow(block)));
+  card.querySelectorAll(".items").forEach(block => addItemRow(block));   // the first empty line
   const tick = card.querySelector(".pdrink");
   const drinkBox = card.querySelector(".drinkBox");
   if (tick && drinkBox) {
     // Special drink items only for drinkers
     tick.addEventListener("change", () => drinkBox.style.display = tick.checked ? "block" : "none");
   }
-  const remove = card.querySelector(".remove");
-  if (remove) remove.addEventListener("click", () => card.remove());
   document.getElementById("people").appendChild(card);
+  return card;
+}
+
+// Cards follow the names: each named person has a card headed with their name
+function sync() {
+  const me = leaderName();
+  document.getElementById("meName").textContent = me ? me + " (you)" : "You";
+  entries.forEach(e => {
+    const n = nameOf(e);
+    e.card.querySelector(".who").textContent = e.input ? n : (me ? me + " (you)" : "You");
+    e.card.style.display = ASKS && (!e.input || n) ? "block" : "none";
+  });
+}
+
+// The growing list: a new empty name line appears once the last one is filled
+function addNameRow() {
+  const num = entries.length + 1;
+  const row = document.createElement("div");
+  row.className = "nameRow";
+  row.innerHTML = '<span class="num">' + num + '.</span>' +
+    '<input type="text" class="pname" maxlength="60" autocapitalize="words" placeholder="First name">';
+  document.getElementById("names").appendChild(row);
+  const entry = { input: row.querySelector("input"), card: makeCard(num) };
+  entries.push(entry);
+  entry.input.addEventListener("input", () => {
+    if (entry === entries[entries.length - 1] && entry.input.value.trim()) addNameRow();
+    sync();
+  });
+  sync();
 }
 
 function itemsOf(card, kind) {
@@ -193,27 +222,23 @@ if (!invite) {
   document.getElementById("bad").style.display = "block";
 } else {
   history.replaceState(null, "", location.pathname);
-  const sel = document.getElementById("group");
-  const o = document.createElement("option");
-  o.value = "__new__"; o.textContent = "A new group of my own";
-  sel.appendChild(o);
-  (invite.g || []).forEach(name => {
-    const opt = document.createElement("option");
-    opt.value = name; opt.textContent = "Join " + name;
-    sel.appendChild(opt);
-  });
-  const toggle = () => document.getElementById("newGroupBox").style.display =
-    sel.value === "__new__" ? "block" : "none";
-  sel.addEventListener("change", toggle); toggle();
-  if (DRINKS >= 1) document.getElementById("peopleHint").textContent =
-    "Include yourself first, then add everyone else you are paying for, and tick each person who is drinking.";
   // The email and mobile boxes appear only when that way of receiving the report is ticked
   [["byEmail", "emailBox"], ["bySms", "smsBox"]].forEach(([tickId, boxId]) => {
     const t = document.getElementById(tickId);
     t.addEventListener("change", () => document.getElementById(boxId).style.display = t.checked ? "block" : "none");
   });
-  addPerson(true);
-  document.getElementById("addPerson").addEventListener("click", () => addPerson(false));
+  // What each person's card asks, to match the approach
+  const asks = [];
+  if (DRINKS >= 1) asks.push("tick each person who is drinking");
+  if (FOOD && DRINKS === 2) asks.push("add any special food or drink items each person had");
+  else if (FOOD) asks.push("add any special food items each person had");
+  else if (DRINKS === 2) asks.push("add any special drink items each drinker had");
+  document.getElementById("detailsHint").textContent = "Please " + asks.join(", and ") + ".";
+  document.getElementById("detailsTitle").style.display = ASKS ? "block" : "none";
+  // The leader is person 1, then the first empty name line
+  entries.push({ input: null, card: makeCard(1) });
+  document.getElementById("name").addEventListener("input", sync);
+  addNameRow();
   document.getElementById("form").style.display = "block";
 }
 
@@ -223,16 +248,21 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
   const result = document.getElementById("result");
   btn.disabled = true; btn.textContent = "Sending…";
   try {
-    const leader = document.getElementById("name").value.trim();
+    const leader = leaderName();
     if (!leader) throw new Error("Please enter your first name.");
-    const people = Array.from(document.querySelectorAll(".person")).map((card, i) => {
-      const nameBox = card.querySelector(".pname");
-      const name = i === 0 ? leader : (nameBox ? nameBox.value.trim() : "");
-      if (!name) throw new Error("Please enter a first name for each person, or remove them.");
+    const emailOn = document.getElementById("byEmail").checked;
+    const smsOn = document.getElementById("bySms").checked;
+    const email = emailOn ? document.getElementById("email").value.trim() : "";
+    const mobile = smsOn ? document.getElementById("mobile").value.trim() : "";
+    if (emailOn && !email) throw new Error("Please enter your email address, or untick By email.");
+    if (smsOn && !mobile) throw new Error("Please enter your mobile number, or untick By SMS.");
+    // Everyone named, the leader first
+    const people = entries.filter(e => nameOf(e)).map(e => {
+      const card = e.card;
       const tick = card.querySelector(".pdrink");
       const drinks = !!(tick && tick.checked);
       return {
-        name: name,
+        name: nameOf(e),
         drinks: drinks,
         food: itemsOf(card, "food"),
         foodAdd: addsTo(card, "food"),
@@ -240,20 +270,13 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
         drinkAdd: drinks && addsTo(card, "drink")
       };
     });
-    const emailOn = document.getElementById("byEmail").checked;
-    const smsOn = document.getElementById("bySms").checked;
-    const email = emailOn ? document.getElementById("email").value.trim() : "";
-    const mobile = smsOn ? document.getElementById("mobile").value.trim() : "";
-    if (emailOn && !email) throw new Error("Please enter your email address, or untick By email.");
-    if (smsOn && !mobile) throw new Error("Please enter your mobile number, or untick By SMS.");
-    const sel = document.getElementById("group").value;
     const details = {
       name: leader,
       mobile: mobile,
       email: email,
       wantsRecord: emailOn || smsOn,
-      group: sel === "__new__" ? "" : sel,
-      newGroup: sel === "__new__" ? document.getElementById("newGroup").value.trim() : "",
+      group: "",          // every leader starts their own group
+      newGroup: "",
       drinks: people[0].drinks,
       people: people
     };
