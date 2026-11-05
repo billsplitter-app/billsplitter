@@ -8,16 +8,30 @@
   body { margin:0; font-family:-apple-system,Helvetica,Arial,sans-serif; background:#1a1410; color:#f3e6c8; }
   .wrap { max-width:480px; margin:0 auto; padding:28px 20px 60px; }
   h1 { font-family:Georgia,serif; color:#e8c46a; text-align:center; font-size:34px; margin:8px 0 4px; }
+  h2 { font-family:Georgia,serif; color:#e8c46a; font-size:22px; margin:32px 0 4px; }
   .sub { text-align:center; color:#c9b48a; margin-bottom:26px; }
+  .hint { color:#c9b48a; font-size:14px; line-height:1.4; }
   label { display:block; margin:18px 0 6px; font-weight:600; }
-  input[type=text], input[type=tel], input[type=email], select {
+  input[type=text], input[type=tel], input[type=email], input[type=number], select {
     width:100%; box-sizing:border-box; padding:13px; font-size:17px;
     border-radius:10px; border:1px solid #8a6d35; background:#fffbe8; color:#222; }
-  .tick { display:flex; align-items:center; gap:12px; margin-top:22px; font-size:17px; }
-  .tick input { width:26px; height:26px; }
+  .tick { display:flex; align-items:center; gap:12px; margin-top:16px; font-size:17px; font-weight:400; }
+  .tick input { width:26px; height:26px; margin:0; }
   button { width:100%; margin-top:30px; padding:15px; font-size:18px; font-weight:700;
     border:none; border-radius:12px; background:#e8c46a; color:#1a1410; }
   button:disabled { opacity:.5; }
+  button.ghost { width:auto; margin-top:12px; padding:9px 14px; font-size:15px; font-weight:600;
+    background:transparent; color:#e8c46a; border:1px solid #8a6d35; }
+  button.x { width:44px; margin:0; padding:0; font-size:22px; background:transparent; color:#ff8a70; }
+  .person { margin-top:18px; padding:4px 16px 18px; border:1px solid #5c4724; border-radius:14px; background:#241b14; }
+  .who { margin-top:14px; font-size:18px; font-weight:700; color:#e8c46a; }
+  .items { margin-top:18px; }
+  .itemsTitle { font-weight:600; }
+  .row { display:flex; gap:8px; align-items:center; margin-top:10px; }
+  .row .dollar { color:#c9b48a; }
+  .row .amt { flex:0 0 32%; }
+  .row .desc { flex:1; }
+  .choice .tick { margin-top:10px; font-size:15px; }
   .msg { margin-top:22px; padding:14px; border-radius:10px; text-align:center; }
   .ok { background:#1f4d2b; color:#d8f5df; }
   .err { background:#5a1a14; color:#ffd9d4; }
@@ -29,31 +43,41 @@
 <body>
 <div class="wrap">
   <h1>Bill Splitter</h1>
-  <div class="sub">Add yourself to the bill</div>
+  <div class="sub">Add your group to the bill</div>
 
   <div id="bad" class="msg err" style="display:none">
     This invite link is incomplete or has expired. Please ask the organiser to show the QR code again.
   </div>
 
   <form id="form" style="display:none" autocomplete="on">
-    <label for="name">Your name</label>
-    <input id="name" name="name" type="text" autocomplete="name" required maxlength="60">
+    <label for="name">Your first name</label>
+    <input id="name" name="name" type="text" autocomplete="given-name" required maxlength="60">
 
-    <label for="mobile">Mobile (optional)</label>
-    <input id="mobile" name="mobile" type="tel" autocomplete="tel" maxlength="30">
-
-    <label for="email">Email (optional)</label>
-    <input id="email" name="email" type="email" autocomplete="email" maxlength="100">
+    <label>Would you like to receive your group invoice and report by email or SMS (or both)?</label>
+    <label class="tick"><input id="byEmail" type="checkbox"> By email</label>
+    <label class="tick"><input id="bySms" type="checkbox"> By SMS</label>
+    <div id="emailBox" style="display:none">
+      <label for="email">Your email address</label>
+      <input id="email" name="email" type="email" autocomplete="email" maxlength="100">
+    </div>
+    <div id="smsBox" style="display:none">
+      <label for="mobile">Your mobile number</label>
+      <input id="mobile" name="mobile" type="tel" autocomplete="tel" maxlength="30">
+    </div>
+    <div class="hint" style="margin-top:12px">If you don't want to provide a phone number or email address, you can scan a QR code on the organiser's phone to obtain your report.</div>
 
     <label for="group">Your group</label>
     <select id="group"></select>
 
     <div id="newGroupBox">
-      <label for="newGroup">Name of your new group</label>
+      <label for="newGroup">Name of your group</label>
       <input id="newGroup" type="text" maxlength="60" placeholder="e.g. The Browns, or just your name">
     </div>
 
-    <label class="tick"><input id="drinks" type="checkbox"> I'm having drinks</label>
+    <h2>Who you are paying for</h2>
+    <div class="hint" id="peopleHint">Include yourself first, then add everyone else you are paying for.</div>
+    <div id="people"></div>
+    <button type="button" class="ghost" id="addPerson">+ Add another person</button>
 
     <button id="send" type="submit">Send to organiser</button>
   </form>
@@ -88,21 +112,108 @@ try {
   if (!invite.i || !invite.k) invite = null;
 } catch (e) { invite = null; }
 
+// The organiser's bill splitting approach decides which questions are asked
+const FOOD = !!(invite && invite.f);           // Detailed food: special food items
+const DRINKS = (invite && invite.d) || 0;      // 0 none, 1 Drinker ticks, 2 ticks and special drink items
+let cardCount = 0;
+
+// Amount and description boxes, with Add or Replace once an item is entered
+function itemsBlock(kind, n) {
+  const bill = kind === "food" ? "food" : "drinks";
+  const title = kind === "food" ? "Special food items (optional)" : "Special drink items (optional)";
+  const eg = kind === "food" ? "e.g. Entrée" : "e.g. Cocktail";
+  return '<div class="items ' + kind + '" data-eg="' + eg + '">' +
+    '<div class="itemsTitle">' + title + '</div>' +
+    '<div class="hint">Only for something different from the rest of the table, such as an extra course or an expensive drink.</div>' +
+    '<div class="rows"></div>' +
+    '<button type="button" class="ghost addItem">+ Add an item</button>' +
+    '<div class="choice" style="display:none">' +
+      '<label class="tick"><input type="radio" name="' + kind + n + '" value="add"> Add to the average ' + bill + ' bill</label>' +
+      '<label class="tick"><input type="radio" name="' + kind + n + '" value="replace" checked> Replace the average ' + bill + ' bill</label>' +
+    '</div></div>';
+}
+
+function addItemRow(block) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = '<span class="dollar">$</span>' +
+    '<input type="number" inputmode="decimal" step="0.01" min="0" class="amt" placeholder="Amount">' +
+    '<input type="text" class="desc" maxlength="40">' +
+    '<button type="button" class="x" aria-label="Remove item">×</button>';
+  row.querySelector(".desc").placeholder = block.dataset.eg;
+  row.querySelector(".x").addEventListener("click", () => { row.remove(); showChoice(block); });
+  block.querySelector(".rows").appendChild(row);
+  showChoice(block);
+}
+
+function showChoice(block) {
+  block.querySelector(".choice").style.display = block.querySelector(".row") ? "block" : "none";
+}
+
+// One card per person; the first card is the group leader
+function addPerson(isLeader) {
+  const n = ++cardCount;
+  const card = document.createElement("div");
+  card.className = "person";
+  let html = isLeader
+    ? '<div class="who">You</div>'
+    : '<label>First name</label><input type="text" class="pname" maxlength="60" autocapitalize="words">';
+  if (DRINKS >= 1) html += '<label class="tick"><input type="checkbox" class="pdrink"> Drinker</label>';
+  if (FOOD) html += itemsBlock("food", n);
+  if (DRINKS === 2) html += '<div class="drinkBox" style="display:none">' + itemsBlock("drink", n) + '</div>';
+  if (!isLeader) html += '<button type="button" class="ghost remove">Remove this person</button>';
+  card.innerHTML = html;
+  card.querySelectorAll(".items").forEach(block =>
+    block.querySelector(".addItem").addEventListener("click", () => addItemRow(block)));
+  const tick = card.querySelector(".pdrink");
+  const drinkBox = card.querySelector(".drinkBox");
+  if (tick && drinkBox) {
+    // Special drink items only for drinkers
+    tick.addEventListener("change", () => drinkBox.style.display = tick.checked ? "block" : "none");
+  }
+  const remove = card.querySelector(".remove");
+  if (remove) remove.addEventListener("click", () => card.remove());
+  document.getElementById("people").appendChild(card);
+}
+
+function itemsOf(card, kind) {
+  const block = card.querySelector(".items." + kind);
+  if (!block) return [];
+  return Array.from(block.querySelectorAll(".row")).map(r => ({
+    a: Math.round((parseFloat(r.querySelector(".amt").value) || 0) * 100) / 100,
+    n: r.querySelector(".desc").value.trim()
+  })).filter(x => x.a > 0);
+}
+function addsTo(card, kind) {
+  const r = card.querySelector('.items.' + kind + ' input[value="add"]');
+  return !!(r && r.checked);
+}
+
 if (!invite) {
   document.getElementById("bad").style.display = "block";
 } else {
   history.replaceState(null, "", location.pathname);
   const sel = document.getElementById("group");
-  (invite.g || []).forEach(name => {
-    const o = document.createElement("option");
-    o.value = name; o.textContent = name; sel.appendChild(o);
-  });
   const o = document.createElement("option");
-  o.value = "__new__"; o.textContent = "New group / just me";
+  o.value = "__new__"; o.textContent = "A new group of my own";
   sel.appendChild(o);
+  (invite.g || []).forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name; opt.textContent = "Join " + name;
+    sel.appendChild(opt);
+  });
   const toggle = () => document.getElementById("newGroupBox").style.display =
     sel.value === "__new__" ? "block" : "none";
   sel.addEventListener("change", toggle); toggle();
+  if (DRINKS >= 1) document.getElementById("peopleHint").textContent =
+    "Include yourself first, then add everyone else you are paying for, and tick each person who is drinking.";
+  // The email and mobile boxes appear only when that way of receiving the report is ticked
+  [["byEmail", "emailBox"], ["bySms", "smsBox"]].forEach(([tickId, boxId]) => {
+    const t = document.getElementById(tickId);
+    t.addEventListener("change", () => document.getElementById(boxId).style.display = t.checked ? "block" : "none");
+  });
+  addPerson(true);
+  document.getElementById("addPerson").addEventListener("click", () => addPerson(false));
   document.getElementById("form").style.display = "block";
 }
 
@@ -112,16 +223,40 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
   const result = document.getElementById("result");
   btn.disabled = true; btn.textContent = "Sending…";
   try {
+    const leader = document.getElementById("name").value.trim();
+    if (!leader) throw new Error("Please enter your first name.");
+    const people = Array.from(document.querySelectorAll(".person")).map((card, i) => {
+      const nameBox = card.querySelector(".pname");
+      const name = i === 0 ? leader : (nameBox ? nameBox.value.trim() : "");
+      if (!name) throw new Error("Please enter a first name for each person, or remove them.");
+      const tick = card.querySelector(".pdrink");
+      const drinks = !!(tick && tick.checked);
+      return {
+        name: name,
+        drinks: drinks,
+        food: itemsOf(card, "food"),
+        foodAdd: addsTo(card, "food"),
+        drink: drinks ? itemsOf(card, "drink") : [],
+        drinkAdd: drinks && addsTo(card, "drink")
+      };
+    });
+    const emailOn = document.getElementById("byEmail").checked;
+    const smsOn = document.getElementById("bySms").checked;
+    const email = emailOn ? document.getElementById("email").value.trim() : "";
+    const mobile = smsOn ? document.getElementById("mobile").value.trim() : "";
+    if (emailOn && !email) throw new Error("Please enter your email address, or untick By email.");
+    if (smsOn && !mobile) throw new Error("Please enter your mobile number, or untick By SMS.");
     const sel = document.getElementById("group").value;
     const details = {
-      name: document.getElementById("name").value.trim(),
-      mobile: document.getElementById("mobile").value.trim(),
-      email: document.getElementById("email").value.trim(),
+      name: leader,
+      mobile: mobile,
+      email: email,
+      wantsRecord: emailOn || smsOn,
       group: sel === "__new__" ? "" : sel,
       newGroup: sel === "__new__" ? document.getElementById("newGroup").value.trim() : "",
-      drinks: document.getElementById("drinks").checked
+      drinks: people[0].drinks,
+      people: people
     };
-    if (!details.name) throw new Error("Please enter your name.");
 
     const key = await crypto.subtle.importKey("raw", fromB64url(invite.k), "AES-GCM", false, ["encrypt"]);
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -141,7 +276,7 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
 
     document.getElementById("form").style.display = "none";
     result.className = "msg ok";
-    result.textContent = "Done! You've been added. You can close this page.";
+    result.textContent = "Done! Your group has been sent to the organiser, who will check it. You can close this page.";
     result.style.display = "block";
   } catch (e) {
     result.className = "msg err";
