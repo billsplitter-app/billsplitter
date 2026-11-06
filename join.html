@@ -55,6 +55,14 @@
     <label for="name">Your first name</label>
     <input id="name" name="name" type="text" autocomplete="given-name" required maxlength="60">
 
+    <label>Are you the person paying for the rest of your group?</label>
+    <label class="tick"><input type="radio" name="payer" value="yes"> Yes</label>
+    <label class="tick"><input type="radio" name="payer" value="no"> No</label>
+    <div id="leaderBox" style="display:none">
+      <label for="leader">What is the first name of the group leader?</label>
+      <input id="leader" type="text" maxlength="60" autocapitalize="words">
+    </div>
+
     <label>Would you like to receive your group invoice and report by email or SMS (or both)?</label>
     <label class="tick"><input id="byEmail" type="checkbox"> By email</label>
     <label class="tick"><input id="bySms" type="checkbox"> By SMS</label>
@@ -68,10 +76,12 @@
     </div>
     <div class="hint" style="margin-top:12px">If you don't want to provide a phone number or email address, you can scan a QR code on the organiser's phone to obtain your report.</div>
 
+    <div id="payBox">
     <h2>Who you are paying for</h2>
     <div class="hint">You are number 1. Add the first name of each other person you are paying for. A new line appears as you fill each one. To remove someone, clear their name.</div>
     <div id="names">
       <div class="nameRow"><span class="num">1.</span><div class="me" id="meName">You</div></div>
+    </div>
     </div>
 
     <div id="detailsTitle">
@@ -122,6 +132,9 @@ const ASKS = FOOD || DRINKS >= 1;              // any questions for each person 
 const entries = [];
 function leaderName() { return document.getElementById("name").value.trim(); }
 function nameOf(e) { return e.input ? e.input.value.trim() : leaderName(); }
+// Yes, No, or "" when not yet answered
+function payerAnswer() { const r = document.querySelector('input[name="payer"]:checked'); return r ? r.value : ""; }
+function isPayer() { return payerAnswer() !== "no"; }
 
 // The same questions as the app: Add or Replace, then amount and description lines
 function itemsBlock(kind, n) {
@@ -184,7 +197,7 @@ function sync() {
   entries.forEach(e => {
     const n = nameOf(e);
     e.card.querySelector(".who").textContent = e.input ? n : (me ? me + " (you)" : "You");
-    e.card.style.display = ASKS && (!e.input || n) ? "block" : "none";
+    e.card.style.display = ASKS && (!e.input || (n && isPayer())) ? "block" : "none";
   });
 }
 
@@ -227,6 +240,13 @@ if (!invite) {
     const t = document.getElementById(tickId);
     t.addEventListener("change", () => document.getElementById(boxId).style.display = t.checked ? "block" : "none");
   });
+  // Paying for the group? No shows the group leader's name box and hides Who you are paying for
+  document.querySelectorAll('input[name="payer"]').forEach(r => r.addEventListener("change", () => {
+    const no = payerAnswer() === "no";
+    document.getElementById("leaderBox").style.display = no ? "block" : "none";
+    document.getElementById("payBox").style.display = no ? "none" : "block";
+    sync();
+  }));
   // What each person's card asks, to match the approach
   const asks = [];
   if (DRINKS >= 1) asks.push("tick each person who is drinking");
@@ -250,6 +270,10 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
   try {
     const leader = leaderName();
     if (!leader) throw new Error("Please enter your first name.");
+    if (!payerAnswer()) throw new Error("Please say whether you are paying for the rest of your group.");
+    const payer = isPayer();
+    const leaderOf = payer ? "" : document.getElementById("leader").value.trim();
+    if (!payer && !leaderOf) throw new Error("Please enter the first name of your group leader.");
     const emailOn = document.getElementById("byEmail").checked;
     const smsOn = document.getElementById("bySms").checked;
     const email = emailOn ? document.getElementById("email").value.trim() : "";
@@ -257,7 +281,7 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
     if (emailOn && !email) throw new Error("Please enter your email address, or untick By email.");
     if (smsOn && !mobile) throw new Error("Please enter your mobile number, or untick By SMS.");
     // Everyone named, the leader first
-    const people = entries.filter(e => nameOf(e)).map(e => {
+    const people = entries.filter((e, k) => nameOf(e) && (payer || k === 0)).map(e => {
       const card = e.card;
       const tick = card.querySelector(".pdrink");
       const drinks = !!(tick && tick.checked);
@@ -275,7 +299,7 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
       mobile: mobile,
       email: email,
       wantsRecord: emailOn || smsOn,
-      group: "",          // every leader starts their own group
+      group: leaderOf,    // blank for a group leader; otherwise the leader's group they belong to
       newGroup: "",
       drinks: people[0].drinks,
       people: people
@@ -310,4 +334,3 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
 });
 </script>
 </body>
-</html>
