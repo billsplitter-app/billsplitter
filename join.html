@@ -162,8 +162,8 @@ function makeCard(n) {
   const card = document.createElement("div");
   card.className = "person";
   let html = '<div class="who"></div>';
+  if (FOOD) html += itemsBlock("food", n);   // food first, then the Drinker tick, then drink items
   if (DRINKS >= 1) html += '<label class="tick"><input type="checkbox" class="pdrink"> Drinker?</label>';
-  if (FOOD) html += itemsBlock("food", n);
   if (DRINKS === 2) html += '<div class="drinkBox" style="display:none">' + itemsBlock("drink", n) + '</div>';
   card.innerHTML = html;
   card.querySelectorAll(".items").forEach(block => addItemRow(block));   // the first empty line
