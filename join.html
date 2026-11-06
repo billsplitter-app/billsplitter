@@ -145,9 +145,11 @@ function itemsBlock(kind, n) {
     '<div class="itemsTitle">' + title + '</div>' +
     '<div class="hint">Only for something different from the rest of the table, such as an extra course or an expensive drink.</div>' +
     '<div class="choice">' +
+      '<label class="tick"><input type="radio" name="' + kind + n + '" value="avg" checked> ' +
+        (kind === "food" ? "Pay the average food bill only?" : "Pay the average drinks bill only?") + '</label>' +
       '<label class="tick"><input type="radio" name="' + kind + n + '" value="add"> ' +
         (kind === "food" ? "Add special food item to the average food bill? OR" : "Add special drink item to the average drinks bill? OR") + '</label>' +
-      '<label class="tick"><input type="radio" name="' + kind + n + '" value="replace" checked> ' +
+      '<label class="tick"><input type="radio" name="' + kind + n + '" value="replace"> ' +
         (kind === "food" ? "Replace the average food bill with your food item?" : "Replace the average drinks bill with your drink item?") + '</label>' +
     '</div>' +
     '<div class="rows"></div>' +
@@ -162,6 +164,14 @@ function addItemRow(block) {
     '<input type="text" class="desc" maxlength="40">';
   row.querySelector(".desc").placeholder = block.dataset.eg;
   const amt = row.querySelector(".amt");
+  // Typing an amount or description moves the choice from average only to Replace
+  const desc = row.querySelector(".desc");
+  const pick = () => {
+    const avg = block.querySelector('input[value="avg"]');
+    if (avg && avg.checked && (amt.value || desc.value.trim())) block.querySelector('input[value="replace"]').checked = true;
+  };
+  amt.addEventListener("input", pick);
+  desc.addEventListener("input", pick);
   // A new empty line appears once the last one has an amount, as in the app
   amt.addEventListener("input", () => {
     const rows = block.querySelectorAll(".row");
@@ -220,7 +230,7 @@ function addNameRow() {
 
 function itemsOf(card, kind) {
   const block = card.querySelector(".items." + kind);
-  if (!block) return [];
+  if (!block || block.querySelector('input[value="avg"]:checked')) return [];   // average only: no special items
   return Array.from(block.querySelectorAll(".row")).map(r => ({
     a: Math.round((parseFloat(r.querySelector(".amt").value) || 0) * 100) / 100,
     n: r.querySelector(".desc").value.trim()
