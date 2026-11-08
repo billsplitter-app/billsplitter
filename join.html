@@ -209,7 +209,7 @@ function sync() {
   entries.forEach(e => {
     const n = nameOf(e);
     e.card.querySelector(".who").textContent = e.input ? n : (me ? me + " (you)" : "You");
-    e.card.style.display = ASKS && (!e.input || (n && isPayer())) ? "block" : "none";
+    e.card.style.display = ASKS && isPayer() && (!e.input || n) ? "block" : "none";   // only group leaders fill in details
   });
 }
 
@@ -266,6 +266,7 @@ if (!invite) {
     const no = payerAnswer() === "no";
     document.getElementById("leaderBox").style.display = no ? "block" : "none";
     document.getElementById("payBox").style.display = no ? "none" : "block";
+    document.getElementById("detailsTitle").style.display = ASKS && !no ? "block" : "none";   // members don't fill in anyone's details
     sync();
   }));
   // What each person's card asks, to match the approach
@@ -302,7 +303,7 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
     if (emailOn && !email) throw new Error("Please enter your email address, or untick By email.");
     if (smsOn && !mobile) throw new Error("Please enter your mobile number, or untick By SMS.");
     // Everyone named, the leader first
-    const people = entries.filter((e, k) => nameOf(e) && (payer || k === 0)).map(e => {
+    const people = entries.filter(e => payer && nameOf(e)).map(e => {   // members send no one's details; their leader does
       const card = e.card;
       const tick = card.querySelector(".pdrink");
       const drinks = !!(tick && tick.checked);
@@ -322,7 +323,7 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
       wantsRecord: emailOn || smsOn,
       group: leaderOf,    // blank for a group leader; otherwise the leader's group they belong to
       newGroup: "",
-      drinks: people[0].drinks,
+      drinks: people.length ? people[0].drinks : false,
       people: people
     };
 
