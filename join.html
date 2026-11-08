@@ -78,7 +78,7 @@
     </div>
     
 
-    <div id="payBox">
+    <div id="payBox" style="display:none">
     <h2>Who you are paying for</h2>
     <div class="hint">You are number 1. Add the first name of each other person you are paying for. A new line appears as you fill each one. To remove someone, clear their name.</div>
     <div id="names">
@@ -136,7 +136,7 @@ function leaderName() { return document.getElementById("name").value.trim(); }
 function nameOf(e) { return e.input ? e.input.value.trim() : leaderName(); }
 // Yes, No, or "" when not yet answered
 function payerAnswer() { const r = document.querySelector('input[name="payer"]:checked'); return r ? r.value : ""; }
-function isPayer() { return payerAnswer() !== "no"; }
+function isPayer() { return payerAnswer() === "yes"; }   // nothing about the group is asked until they answer Yes
 
 // The same questions as the app: Add or Replace, then amount and description lines
 function itemsBlock(kind, n) {
@@ -276,7 +276,7 @@ if (!invite) {
   else if (FOOD) asks.push("add any special food items each person had");
   else if (DRINKS === 2) asks.push("add any special drink items each drinker had");
   document.getElementById("detailsHint").textContent = "Please " + asks.join(", and ") + ".";
-  document.getElementById("detailsTitle").style.display = ASKS ? "block" : "none";
+  document.getElementById("detailsTitle").style.display = "none";   // shown once they answer Yes
   // The leader is person 1, then the first empty name line
   entries.push({ input: null, card: makeCard(1) });
   document.getElementById("name").addEventListener("input", sync);
