@@ -40,12 +40,26 @@
   .err { background:#5a1a14; color:#ffd9d4; }
   .note { margin-top:30px; font-size:14px; color:#b8a57d; line-height:1.5; }
   .note a { color:#e8c46a; }
+  .pins { display:flex; gap:12px; justify-content:center; margin-top:14px; }
+  .pins input { width:56px; height:64px; padding:0; font-size:30px; text-align:center;
+    border-radius:10px; border:1px solid #8a6d35; background:#fffbe8; color:#222; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Bill Splitter</h1>
   <div class="sub">Add your group to the bill</div>
+
+  <div id="pinBox" style="display:none">
+    <label style="text-align:center">Please enter the four-digit PIN here.</label>
+    <div class="pins">
+      <input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 1">
+      <input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 2">
+      <input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 3">
+      <input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 4">
+    </div>
+    <div id="pinErr" class="msg err" style="display:none">That PIN isn't right. Please check it with the organiser and try again.</div>
+  </div>
 
   <div id="bad" class="msg err" style="display:none">
     This invite link is incomplete or has expired. Please ask the organiser to show the QR code again.
@@ -98,7 +112,7 @@
   <div id="result" class="msg" style="display:none"></div>
 
   <div class="note">
-    Your details are scrambled on this phone before they are sent, so only the organiser's app can read them.
+    Your details are locked on this phone before they are sent, so only the organiser's app can read them. Even someone with a photo of the QR code can't unlock them.
     The scrambled copy is deleted automatically within 30 minutes.
     <a href="privacy.html">Privacy policy</a>
   </div>
@@ -119,16 +133,45 @@ function toB64url(bytes) {
 }
 
 let invite = null;
-try {
-  const raw = location.hash.slice(1);
-  invite = JSON.parse(new TextDecoder().decode(fromB64url(raw)));
-  if (!invite.i || !invite.k) invite = null;
-} catch (e) { invite = null; }
+const RAW = location.hash.slice(1);
+const LOCKED = RAW.startsWith("P.");   // the organiser set a PIN
+function readInvite(bytes) {
+  try {
+    const v = JSON.parse(new TextDecoder().decode(bytes));
+    return v && v.i && v.p ? v : null;
+  } catch (e) { return null; }
+}
+if (!LOCKED) { try { invite = readInvite(fromB64url(RAW)); } catch (e) { invite = null; } }
 
-// The organiser's bill splitting approach decides which questions are asked
-const FOOD = !!(invite && invite.f);           // Detailed food: special food items
-const DRINKS = (invite && invite.d) || 0;      // 0 none, 1 Drinker ticks, 2 ticks and special drink items
-const ASKS = FOOD || DRINKS >= 1;              // any questions for each person at all
+// Unlocks PIN-protected details: the PIN is stretched into a key in the same way as the app
+async function unlock(sealedText, pin) {
+  const bytes = fromB64url(sealedText.slice(2));
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: bytes.slice(0, 16), iterations: 100000, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.slice(16, 28) }, key, bytes.slice(28)));
+}
+
+// Four PIN boxes: each digit moves on to the next box, and the fourth tries the PIN
+function pinBoxes(onDone) {
+  const boxes = Array.from(document.querySelectorAll(".pins input"));
+  boxes.forEach((b, i) => {
+    b.addEventListener("input", () => {
+      b.value = b.value.replace(/\D/g, "").slice(-1);
+      if (b.value && i < boxes.length - 1) boxes[i + 1].focus();
+      const pin = boxes.map(x => x.value).join("");
+      if (pin.length === boxes.length) onDone(pin, boxes);
+    });
+    b.addEventListener("keydown", e => { if (e.key === "Backspace" && !b.value && i > 0) boxes[i - 1].focus(); });
+  });
+  boxes[0].focus();
+}
+
+// The organiser's bill splitting approach decides which questions are asked (set once the invite is read)
+let FOOD = false;    // Detailed food: special food items
+let DRINKS = 0;      // 0 none, 1 Drinker ticks, 2 ticks and special drink items
+let ASKS = false;    // any questions for each person at all
 
 // Each person: their name box (none for the leader) and their details card
 const entries = [];
@@ -243,9 +286,11 @@ function addsTo(card, kind) {
   return !!(r && r.checked);
 }
 
-if (!invite) {
-  document.getElementById("bad").style.display = "block";
-} else {
+// Shows the questions once the invite has been read
+function setup() {
+  FOOD = !!invite.f;
+  DRINKS = invite.d || 0;
+  ASKS = FOOD || DRINKS >= 1;
   history.replaceState(null, "", location.pathname);
   // The email and mobile boxes appear only when that way of receiving the report is ticked
   [["byEmail", "emailBox"], ["bySms", "smsBox"]].forEach(([tickId, boxId]) => {
@@ -282,6 +327,27 @@ if (!invite) {
   document.getElementById("name").addEventListener("input", sync);
   addNameRow();
   document.getElementById("form").style.display = "block";
+}
+
+if (LOCKED) {
+  // PIN first: the questions appear once the right PIN is entered
+  history.replaceState(null, "", location.pathname);
+  document.getElementById("pinBox").style.display = "block";
+  pinBoxes(async (pin, boxes) => {
+    try { invite = readInvite(await unlock(RAW, pin)); } catch (e) { invite = null; }
+    if (invite) {
+      document.getElementById("pinBox").style.display = "none";
+      setup();
+    } else {
+      document.getElementById("pinErr").style.display = "block";
+      boxes.forEach(b => b.value = "");
+      boxes[0].focus();
+    }
+  });
+} else if (!invite) {
+  document.getElementById("bad").style.display = "block";
+} else {
+  setup();
 }
 
 document.getElementById("form").addEventListener("submit", async (ev) => {
@@ -327,12 +393,20 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
       people: people
     };
 
-    const key = await crypto.subtle.importKey("raw", fromB64url(invite.k), "AES-GCM", false, ["encrypt"]);
+    // Locked with the organiser's padlock (a public key): only the organiser's phone holds the key that opens it
+    const organiser = await crypto.subtle.importKey("raw", fromB64url(invite.p), { name: "ECDH", namedCurve: "P-256" }, false, []);
+    const mine = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+    const shared = await crypto.subtle.deriveBits({ name: "ECDH", public: organiser }, mine.privateKey, 256);
+    const base = await crypto.subtle.importKey("raw", shared, "HKDF", false, ["deriveKey"]);
+    const key = await crypto.subtle.deriveKey(
+      { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: new TextEncoder().encode("billsplitter-invite") },
+      base, { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
+    const myPublic = new Uint8Array(await crypto.subtle.exportKey("raw", mine.publicKey));   // 65 bytes, sent with the box
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const sealed = new Uint8Array(await crypto.subtle.encrypt(
       { name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(details))));
-    const box = new Uint8Array(iv.length + sealed.length);
-    box.set(iv); box.set(sealed, iv.length);
+    const box = new Uint8Array(myPublic.length + iv.length + sealed.length);
+    box.set(myPublic); box.set(iv, myPublic.length); box.set(sealed, myPublic.length + iv.length);
 
     const res = await fetch(WORKER + "/send", {
       method: "POST",
