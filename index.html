@@ -9,18 +9,55 @@ h1{font-family:Georgia,serif;color:#ffd37e;text-align:center;margin-top:0}
 pre{white-space:pre-wrap;font:16px/1.5 -apple-system,Helvetica,sans-serif}
 .warn{background:#5a1a12;color:#fff;border:1px solid #ff8a70;border-radius:10px;padding:12px 14px;font-weight:600;margin-bottom:18px}
 .note{color:#aaa;font-size:13px;text-align:center}
+label{display:block;text-align:center;font-weight:600}
+.pins{display:flex;gap:12px;justify-content:center;margin:14px 0 18px}
+.pins input{width:56px;height:64px;padding:0;font-size:30px;text-align:center;border-radius:10px;border:1px solid #8a6d35;background:#fffbe8;color:#222}
+.err{background:#5a1a12;color:#fff;border-radius:10px;padding:12px 14px;margin-bottom:18px;text-align:center}
 </style></head><body><div class="card">
 <h1>Bill Splitter</h1>
+<div id="pinBox" style="display:none">
+<label>Please enter the four-digit PIN here.</label>
+<div class="pins">
+<input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 1">
+<input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 2">
+<input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 3">
+<input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 4">
+</div>
+<div class="err" id="pinErr" style="display:none">That PIN isn't right. Please check it with the organiser and try again.</div>
+</div>
 <div class="warn" id="w" style="display:none">To keep this record, take a screenshot now (press the side button and volume up together). For your privacy, it is not saved and will disappear if you refresh or leave this page.</div>
 <pre id="r">No record to show. For privacy, records are not saved. If you need it again, please scan the QR code again.</pre>
 <p class="note">This record is read only from the link on your phone. Nothing is sent or stored online, and it is removed from your browser history straight away.</p>
 </div><script>
+function bytes(h){h=h.replace(/-/g,'+').replace(/_/g,'/');while(h.length%4)h+='=';
+ var b=atob(h),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
+function show(u){document.getElementById('r').textContent=new TextDecoder().decode(u);
+ document.getElementById('w').style.display='block';}
+// A record locked with the organiser's PIN: the PIN is stretched into a key in the same way as the app
+async function unlock(h,pin){var u=bytes(h.slice(2));
+ var base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']);
+ var key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:u.slice(0,16),iterations:100000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
+ return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(16,28)},key,u.slice(28)));}
 try{var h=location.hash.slice(1);
 if(h){
  history.replaceState(null,'',location.pathname);
- h=h.replace(/-/g,'+').replace(/_/g,'/');while(h.length%4)h+='=';
- var b=atob(h),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);
- document.getElementById('r').textContent=new TextDecoder().decode(u);
- document.getElementById('w').style.display='block';
+ if(h.indexOf('P.')===0){
+  // Four PIN boxes: each digit moves on to the next box, and the fourth tries the PIN
+  document.getElementById('pinBox').style.display='block';
+  document.getElementById('r').style.display='none';
+  var boxes=Array.prototype.slice.call(document.querySelectorAll('.pins input'));
+  boxes.forEach(function(b,i){
+   b.addEventListener('input',async function(){
+    b.value=b.value.replace(/\D/g,'').slice(-1);
+    if(b.value&&i<boxes.length-1)boxes[i+1].focus();
+    var pin=boxes.map(function(x){return x.value;}).join('');
+    if(pin.length<boxes.length)return;
+    try{show(await unlock(h,pin));document.getElementById('pinBox').style.display='none';document.getElementById('r').style.display='block';}
+    catch(e){document.getElementById('pinErr').style.display='block';boxes.forEach(function(x){x.value='';});boxes[0].focus();}
+   });
+   b.addEventListener('keydown',function(e){if(e.key==='Backspace'&&!b.value&&i>0)boxes[i-1].focus();});
+  });
+  boxes[0].focus();
+ } else show(bytes(h));
 }}catch(e){}
 </script></body></html>
