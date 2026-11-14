@@ -119,7 +119,7 @@
 </div>
 
 <script>
-const WORKER = "https://billsplitter-invites.billsplitter.workers.dev";
+const WORKER = "https://invites.billsplitter.link";   // the invite server, on Bill Splitter's own web address
 
 function fromB64url(s) {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
@@ -408,14 +408,28 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
     const box = new Uint8Array(myPublic.length + iv.length + sealed.length);
     box.set(myPublic); box.set(iv, myPublic.length); box.set(sealed, myPublic.length + iv.length);
 
-    const res = await fetch(WORKER + "/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: invite.i, box: toB64url(box) })
-    });
-    if (!res.ok) throw new Error(res.status === 429
-      ? "This invite is full. Please ask the organiser."
-      : "Couldn't send. Please try again.");
+    // Sends the locked details, trying again after 2 and 5 seconds if the connection drops
+    let res = null, lastError = "";
+    for (const wait of [0, 2000, 5000]) {
+      if (res) break;
+      if (wait) { btn.textContent = "Trying again…"; await new Promise(r => setTimeout(r, wait)); }
+      try {
+        res = await fetch(WORKER + "/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: invite.i, box: toB64url(box) })
+        });
+      } catch (e) { lastError = e.message || "no connection"; }
+    }
+    if (!res) throw new Error("Couldn't reach the organiser's server (" + lastError +
+      "). Please check this phone's internet connection. If a VPN is switched on, try turning it off, then tap Send to organiser again.");
+    if (!res.ok) {
+      const info = await res.json().catch(() => ({}));
+      throw new Error(res.status === 429
+        ? "This invite is full. Please ask the organiser."
+        : "The server couldn't save your details (error " + res.status + (info.error ? ": " + info.error : "") +
+          "). Please tap Send to organiser again.");
+    }
 
     document.getElementById("form").style.display = "none";
     result.className = "msg ok";
