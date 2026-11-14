@@ -285,6 +285,10 @@ function addsTo(card, kind) {
   const r = card.querySelector('.items.' + kind + ' input[value="add"]');
   return !!(r && r.checked);
 }
+function replaces(card, kind) {
+  const r = card.querySelector('.items.' + kind + ' input[value="replace"]');
+  return !!(r && r.checked);
+}
 
 // Shows the questions once the invite has been read
 function setup() {
@@ -378,8 +382,10 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
         drinks: drinks,
         food: itemsOf(card, "food"),
         foodAdd: addsTo(card, "food"),
+        foodReplace: replaces(card, "food"),   // the tick comes across even with no amount
         drink: drinks ? itemsOf(card, "drink") : [],
-        drinkAdd: drinks && addsTo(card, "drink")
+        drinkAdd: drinks && addsTo(card, "drink"),
+        drinkReplace: drinks && replaces(card, "drink")
       };
     });
     const details = {
