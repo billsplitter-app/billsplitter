@@ -10,20 +10,17 @@ pre{white-space:pre-wrap;font:16px/1.5 -apple-system,Helvetica,sans-serif}
 .warn{background:#5a1a12;color:#fff;border:1px solid #ff8a70;border-radius:10px;padding:12px 14px;font-weight:600;margin-bottom:18px}
 .note{color:#aaa;font-size:13px;text-align:center}
 label{display:block;text-align:center;font-weight:600}
-.pins{display:flex;gap:12px;justify-content:center;margin:14px 0 18px}
-.pins input{width:56px;height:64px;padding:0;font-size:30px;text-align:center;border-radius:10px;border:1px solid #8a6d35;background:#fffbe8;color:#222}
+.pw{display:block;width:100%;max-width:300px;margin:14px auto 14px;box-sizing:border-box;padding:13px;font-size:22px;text-align:center;border-radius:10px;border:1px solid #8a6d35;background:#fffbe8;color:#222}
+.pw::placeholder{color:#999;font-size:17px}
+.go{display:block;width:100%;max-width:300px;margin:0 auto 18px;padding:13px;font-size:18px;font-weight:700;border:none;border-radius:12px;background:#ffd37e;color:#1a1a1a}
 .err{background:#5a1a12;color:#fff;border-radius:10px;padding:12px 14px;margin-bottom:18px;text-align:center}
 </style></head><body><div class="card">
 <h1>Bill Splitter</h1>
 <div id="pinBox" style="display:none">
-<label>Please enter the four-digit PIN here.</label>
-<div class="pins">
-<input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 1">
-<input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 2">
-<input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 3">
-<input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 4">
-</div>
-<div class="err" id="pinErr" style="display:none">That PIN isn't right. Please check it with the organiser and try again.</div>
+<label>Please enter the password here.</label>
+<input id="pw" class="pw" type="password" maxlength="8" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Password" aria-label="Password">
+<button type="button" id="pwGo" class="go">Open</button>
+<div class="err" id="pinErr" style="display:none">That password isn't right. Please check it with the organiser and try again.</div>
 </div>
 <div class="warn" id="w" style="display:none">To keep this record, take a screenshot now (press the side button and volume up together). For your privacy, it is not saved and will disappear if you refresh or leave this page.</div>
 <pre id="r">No record to show. For privacy, records are not saved. If you need it again, please scan the QR code again.</pre>
@@ -33,7 +30,7 @@ function bytes(h){h=h.replace(/-/g,'+').replace(/_/g,'/');while(h.length%4)h+='=
  var b=atob(h),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
 function show(u){document.getElementById('r').textContent=new TextDecoder().decode(u);
  document.getElementById('w').style.display='block';}
-// A record locked with the organiser's PIN: the PIN is stretched into a key in the same way as the app
+// A record locked with the organiser's password: the password is stretched into a key in the same way as the app
 async function unlock(h,pin){var u=bytes(h.slice(2));
  var base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']);
  var key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:u.slice(0,16),iterations:100000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
@@ -42,22 +39,18 @@ try{var h=location.hash.slice(1);
 if(h){
  history.replaceState(null,'',location.pathname);
  if(h.indexOf('P.')===0){
-  // Four PIN boxes: each digit moves on to the next box, and the fourth tries the PIN
+  // The password box: letters and numbers only, capitals ignored, 8 at most, as in the app. Open (or Return) tries it.
   document.getElementById('pinBox').style.display='block';
   document.getElementById('r').style.display='none';
-  var boxes=Array.prototype.slice.call(document.querySelectorAll('.pins input'));
-  boxes.forEach(function(b,i){
-   b.addEventListener('input',async function(){
-    b.value=b.value.replace(/\D/g,'').slice(-1);
-    if(b.value&&i<boxes.length-1)boxes[i+1].focus();
-    var pin=boxes.map(function(x){return x.value;}).join('');
-    if(pin.length<boxes.length)return;
-    try{show(await unlock(h,pin));document.getElementById('pinBox').style.display='none';document.getElementById('r').style.display='block';}
-    catch(e){document.getElementById('pinErr').style.display='block';boxes.forEach(function(x){x.value='';});boxes[0].focus();}
-   });
-   b.addEventListener('keydown',function(e){if(e.key==='Backspace'&&!b.value&&i>0)boxes[i-1].focus();});
-  });
-  boxes[0].focus();
+  var box=document.getElementById('pw');
+  var go=async function(){
+   var pw=box.value.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,8);
+   try{if(pw.length<4)throw 0;show(await unlock(h,pw));document.getElementById('pinBox').style.display='none';document.getElementById('r').style.display='block';}
+   catch(e){document.getElementById('pinErr').style.display='block';box.value='';box.focus();}
+  };
+  document.getElementById('pwGo').addEventListener('click',go);
+  box.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();go();}});
+  box.focus();
  } else show(bytes(h));
 }}catch(e){}
 </script></body></html>
