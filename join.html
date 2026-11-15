@@ -38,8 +38,14 @@
   .msg { margin-top:22px; padding:14px; border-radius:10px; text-align:center; }
   .ok { background:#1f4d2b; color:#d8f5df; }
   .err { background:#5a1a14; color:#ffd9d4; }
-  .note { margin-top:30px; font-size:14px; color:#b8a57d; line-height:1.5; }
+  .note { margin-top:30px; font-size:16px; color:#b8a57d; line-height:1.5; }   /* a little larger */
   .note a { color:#e8c46a; }
+  .instr { margin-bottom:8px; }
+  .instr h2 { margin-top:4px; }
+  .instrHead { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  button.speak { width:auto; margin:0; padding:6px 12px; font-size:20px; font-weight:400;
+    background:transparent; color:#e8c46a; border:1px solid #8a6d35; border-radius:10px; }
+  .instr p { margin:10px 0; font-size:16px; line-height:1.45; }
   .pins { display:flex; gap:12px; justify-content:center; margin-top:14px; }
   .pins input { width:56px; height:64px; padding:0; font-size:30px; text-align:center;
     border-radius:10px; border:1px solid #8a6d35; background:#fffbe8; color:#222; }
@@ -66,6 +72,20 @@
   </div>
 
   <form id="form" style="display:none" autocomplete="on">
+    <!-- Instructions for the group leader; the last three paragraphs match the organiser's approach -->
+    <div class="instr">
+      <div class="instrHead">
+        <h2>Instructions</h2>
+        <button type="button" id="speak" class="speak" aria-label="Read the instructions aloud">🔊</button>
+      </div>
+      <p>As the group leader/payer, your role for the app is to assist the organiser to enter details for the members of your group. What you complete on your phone will be sent to the organiser to check.</p>
+      <p>Please enter your first name and the first names of everyone in your group. The members of your group include anyone for whom you are paying, including yourself.</p>
+      <p>If your first name is the same as another group leader's, please enter another letter or character to make your name unique.</p>
+      <p id="instrTick" style="display:none"></p>
+      <p id="instrFood" style="display:none">Special food items can either replace the average share of the food bill, or they can be added to the average bill as appropriate.</p>
+      <p id="instrDrink" style="display:none"></p>
+    </div>
+
     <label for="name">Your first name</label>
     <input id="name" name="name" type="text" autocomplete="given-name" required maxlength="60">
 
@@ -295,6 +315,24 @@ function setup() {
   FOOD = !!invite.f;
   DRINKS = invite.d || 0;
   ASKS = FOOD || DRINKS >= 1;
+  // Instructions that match the approach
+  const todo = [];
+  if (DRINKS >= 1) todo.push("tick those who are drinkers");
+  if (FOOD && DRINKS === 2) todo.push("add any special food or drink items");
+  else if (FOOD) todo.push("add any special food items");
+  else if (DRINKS === 2) todo.push("add any special drink items");
+  if (todo.length) {
+    const p = document.getElementById("instrTick");
+    p.textContent = "After entering members’ first names, please " + todo.join(" and ") + ".";
+    p.style.display = "block";
+  }
+  if (FOOD) document.getElementById("instrFood").style.display = "block";
+  if (DRINKS === 2) {
+    const p = document.getElementById("instrDrink");
+    p.textContent = (FOOD ? "Similarly, special" : "Special") +
+      " drink items can either replace the average share of the drinks bill, or they can be added to the average bill as seems fair.";
+    p.style.display = "block";
+  }
   history.replaceState(null, "", location.pathname);
   // The email and mobile boxes appear only when that way of receiving the report is ticked
   [["byEmail", "emailBox"], ["bySms", "smsBox"]].forEach(([tickId, boxId]) => {
@@ -332,6 +370,29 @@ function setup() {
   addNameRow();
   document.getElementById("form").style.display = "block";
 }
+
+// Read aloud: the phone's own voice reads the instructions that are showing. Tap again to stop.
+(function () {
+  const btn = document.getElementById("speak");
+  if (!("speechSynthesis" in window)) { btn.style.display = "none"; return; }   // no voice on this browser
+  const s = window.speechSynthesis;
+  btn.addEventListener("click", () => {
+    if (s.speaking) { s.cancel(); btn.textContent = "🔊"; return; }
+    const parts = ["Instructions."].concat(Array.from(document.querySelectorAll(".instr p"))
+      .filter(p => p.style.display !== "none").map(p => p.textContent));
+    const voices = s.getVoices();
+    const voice = voices.find(v => v.lang === "en-AU") || voices.find(v => v.lang.startsWith("en"));   // Australian first
+    parts.forEach((text, i) => {
+      const u = new SpeechSynthesisUtterance(text);
+      if (voice) u.voice = voice;
+      u.lang = voice ? voice.lang : "en-AU";
+      u.rate = 0.95;
+      if (i === parts.length - 1) u.onend = () => btn.textContent = "🔊";
+      s.speak(u);
+    });
+    btn.textContent = "⏹";   // shows Stop while reading
+  });
+})();
 
 if (LOCKED) {
   // PIN first: the questions appear once the right PIN is entered
