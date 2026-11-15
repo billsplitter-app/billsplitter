@@ -46,9 +46,9 @@
   button.speak { width:auto; margin:0; padding:6px 12px; font-size:20px; font-weight:400;
     background:transparent; color:#e8c46a; border:1px solid #8a6d35; border-radius:10px; }
   .instr p { margin:10px 0; font-size:16px; line-height:1.45; }
-  .pins { display:flex; gap:12px; justify-content:center; margin-top:14px; }
-  .pins input { width:56px; height:64px; padding:0; font-size:30px; text-align:center;
+  .pw { display:block; width:100%; max-width:300px; margin:14px auto 0; box-sizing:border-box; padding:13px; font-size:22px; text-align:center;
     border-radius:10px; border:1px solid #8a6d35; background:#fffbe8; color:#222; }
+  .pw::placeholder { color:#999; font-size:17px; }
 </style>
 </head>
 <body>
@@ -57,14 +57,10 @@
   <div class="sub">Add your group to the bill</div>
 
   <div id="pinBox" style="display:none">
-    <label style="text-align:center">Please enter the four-digit PIN here.</label>
-    <div class="pins">
-      <input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 1">
-      <input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 2">
-      <input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 3">
-      <input type="tel" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 4">
-    </div>
-    <div id="pinErr" class="msg err" style="display:none">That PIN isn't right. Please check it with the organiser and try again.</div>
+    <label style="text-align:center">Please enter the password here.</label>
+    <input id="pw" class="pw" type="password" maxlength="8" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Password" aria-label="Password">
+    <button type="button" id="pwGo">Open</button>
+    <div id="pinErr" class="msg err" style="display:none">That password isn't right. Please check it with the organiser and try again.</div>
   </div>
 
   <div id="bad" class="msg err" style="display:none">
@@ -154,7 +150,7 @@ function toB64url(bytes) {
 
 let invite = null;
 const RAW = location.hash.slice(1);
-const LOCKED = RAW.startsWith("P.");   // the organiser set a PIN
+const LOCKED = RAW.startsWith("P.");   // the organiser set a password
 function readInvite(bytes) {
   try {
     const v = JSON.parse(new TextDecoder().decode(bytes));
@@ -163,7 +159,7 @@ function readInvite(bytes) {
 }
 if (!LOCKED) { try { invite = readInvite(fromB64url(RAW)); } catch (e) { invite = null; } }
 
-// Unlocks PIN-protected details: the PIN is stretched into a key in the same way as the app
+// Unlocks password-protected details: the password is stretched into a key in the same way as the app
 async function unlock(sealedText, pin) {
   const bytes = fromB64url(sealedText.slice(2));
   const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveKey"]);
@@ -173,19 +169,19 @@ async function unlock(sealedText, pin) {
   return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.slice(16, 28) }, key, bytes.slice(28)));
 }
 
-// Four PIN boxes: each digit moves on to the next box, and the fourth tries the PIN
-function pinBoxes(onDone) {
-  const boxes = Array.from(document.querySelectorAll(".pins input"));
-  boxes.forEach((b, i) => {
-    b.addEventListener("input", () => {
-      b.value = b.value.replace(/\D/g, "").slice(-1);
-      if (b.value && i < boxes.length - 1) boxes[i + 1].focus();
-      const pin = boxes.map(x => x.value).join("");
-      if (pin.length === boxes.length) onDone(pin, boxes);
-    });
-    b.addEventListener("keydown", e => { if (e.key === "Backspace" && !b.value && i > 0) boxes[i - 1].focus(); });
-  });
-  boxes[0].focus();
+// The password box: letters and numbers only, capitals ignored, 8 at most, as in the app.
+// Open (or Return on the keyboard) tries the password.
+function cleanPassword(s) { return s.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8); }
+function passwordBox(onDone) {
+  const box = document.getElementById("pw");
+  const go = () => {
+    const pw = cleanPassword(box.value);
+    if (pw.length >= 4) onDone(pw, box);
+    else document.getElementById("pinErr").style.display = "block";
+  };
+  document.getElementById("pwGo").addEventListener("click", go);
+  box.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); go(); } });
+  box.focus();
 }
 
 // The organiser's bill splitting approach decides which questions are asked (set once the invite is read)
@@ -399,18 +395,18 @@ function setup() {
 })();
 
 if (LOCKED) {
-  // PIN first: the questions appear once the right PIN is entered
+  // Password first: the questions appear once the right password is entered
   history.replaceState(null, "", location.pathname);
   document.getElementById("pinBox").style.display = "block";
-  pinBoxes(async (pin, boxes) => {
-    try { invite = readInvite(await unlock(RAW, pin)); } catch (e) { invite = null; }
+  passwordBox(async (pw, box) => {
+    try { invite = readInvite(await unlock(RAW, pw)); } catch (e) { invite = null; }
     if (invite) {
       document.getElementById("pinBox").style.display = "none";
       setup();
     } else {
       document.getElementById("pinErr").style.display = "block";
-      boxes.forEach(b => b.value = "");
-      boxes[0].focus();
+      box.value = "";
+      box.focus();
     }
   });
 } else if (!invite) {
