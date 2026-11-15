@@ -87,14 +87,14 @@
     </div>
 
     <label for="name">Your first name</label>
-    <input id="name" name="name" type="text" autocomplete="given-name" required maxlength="60">
+    <input id="name" name="name" type="text" autocomplete="given-name" autocorrect="off" spellcheck="false" autocapitalize="words" required maxlength="60">
 
     <label>Are you the person paying for the rest of your group?</label>
     <label class="tick"><input type="radio" name="payer" value="yes"> Yes</label>
     <label class="tick"><input type="radio" name="payer" value="no"> No</label>
     <div id="leaderBox" style="display:none">
       <label for="leader">What is the first name of the group leader?</label>
-      <input id="leader" type="text" maxlength="60" autocapitalize="words">
+      <input id="leader" type="text" maxlength="60" autocapitalize="words" autocorrect="off" spellcheck="false">
       <div class="hint" style="margin-top:8px;color:#ffb347">⚠️ Please check your group leader's first name carefully. It must be spelt exactly as they entered it, or you won't be added to their group.</div>
     </div>
 
@@ -282,7 +282,7 @@ function addNameRow() {
   const row = document.createElement("div");
   row.className = "nameRow";
   row.innerHTML = '<span class="num">' + num + '.</span>' +
-    '<input type="text" class="pname" maxlength="60" autocapitalize="words" placeholder="First name">';
+    '<input type="text" class="pname" maxlength="60" autocapitalize="words" autocorrect="off" spellcheck="false" placeholder="First name">';
   document.getElementById("names").appendChild(row);
   const entry = { input: row.querySelector("input"), card: makeCard(num) };
   entries.push(entry);
