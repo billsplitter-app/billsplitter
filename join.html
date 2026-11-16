@@ -221,12 +221,12 @@ function itemsBlock(kind, n) {
 // The grey examples in the special food and drink description boxes follow the Add or Replace tick, as in the app.
 // Food, first item: "eg entrée instead of main" (Replace) or "eg entrée and main" (Add);
 // food, any further item: "eg dessert instead of main" or "eg dessert and main".
-// Drinks, every item: "eg lemonade only, no alcohol" (Replace) or "eg cocktail and the usual drinks" (Add).
+// Drinks, every item: "eg Coke only - no beer" (Replace) or "eg cocktail and the usual drinks" (Add).
 function foodEg(block) {
   const adding = block.querySelector('input[value="add"]').checked;
   const drink = block.classList.contains("drink");
   block.querySelectorAll(".row .desc").forEach((d, k) => d.placeholder = drink
-    ? (adding ? "eg cocktail and the usual drinks" : "eg lemonade only, no alcohol")
+    ? (adding ? "eg cocktail and the usual drinks" : "eg Coke only - no beer")
     : k === 0
       ? (adding ? "eg entrée and main" : "eg entrée instead of main")
       : (adding ? "eg dessert and main" : "eg dessert instead of main"));
