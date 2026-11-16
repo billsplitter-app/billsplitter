@@ -34,6 +34,7 @@
   .row .dollar { color:#c9b48a; }
   .row .amt { flex:0 0 32%; }
   .row .desc { flex:1; }
+  .row .desc::placeholder { font-size:14px; }   /* room for "eg entrée instead of main" */
   .choice .tick { margin-top:10px; font-size:15px; }
   .msg { margin-top:22px; padding:14px; border-radius:10px; text-align:center; }
   .ok { background:#1f4d2b; color:#d8f5df; }
@@ -210,11 +211,25 @@ function itemsBlock(kind, n) {
       '<label class="tick" style="display:none"><input type="radio" name="' + kind + n + '" value="avg" checked> ' +
         (kind === "food" ? "Pay the average food bill only?" : "Pay the average drinks bill only?") + '</label>' +
       '<label class="tick"><input type="radio" name="' + kind + n + '" value="add"> ' +
-        (kind === "food" ? "Add special food item to the average food bill? OR" : "Add special drink item to the average drinks bill? OR") + '</label>' +
+        (kind === "food" ? "Add special food item to the average food bill?&nbsp;&nbsp;&nbsp;... OR" : "Add special drink item to the average drinks bill? OR") + '</label>' +
       '<label class="tick"><input type="radio" name="' + kind + n + '" value="replace"> ' +
         (kind === "food" ? "Replace the average food bill with your food item?" : "Replace the average drinks bill with your drink item?") + '</label>' +
     '</div>' +
     '</div>';
+}
+
+// The grey examples in the special food and drink description boxes follow the Add or Replace tick, as in the app.
+// Food, first item: "eg entrée instead of main" (Replace) or "eg entrée and main" (Add);
+// food, any further item: "eg dessert instead of main" or "eg dessert and main".
+// Drinks, every item: "eg lemonade only, no alcohol" (Replace) or "eg cocktail and the usual drinks" (Add).
+function foodEg(block) {
+  const adding = block.querySelector('input[value="add"]').checked;
+  const drink = block.classList.contains("drink");
+  block.querySelectorAll(".row .desc").forEach((d, k) => d.placeholder = drink
+    ? (adding ? "eg cocktail and the usual drinks" : "eg lemonade only, no alcohol")
+    : k === 0
+      ? (adding ? "eg entrée and main" : "eg entrée instead of main")
+      : (adding ? "eg dessert and main" : "eg dessert instead of main"));
 }
 
 function addItemRow(block) {
@@ -237,12 +252,14 @@ function addItemRow(block) {
   };
   amt.addEventListener("input", pick);
   desc.addEventListener("input", pick);
+  [amt, desc].forEach(b => b.addEventListener("input", () => foodEg(block)));   // the examples follow Add or Replace
   // A new empty line appears once the last one has an amount, as in the app
   amt.addEventListener("input", () => {
     const rows = block.querySelectorAll(".row");
     if (row === rows[rows.length - 1] && parseFloat(amt.value) > 0) addItemRow(block);
   });
   block.querySelector(".rows").appendChild(row);
+  foodEg(block);
 }
 
 // The details card for person n, with the questions that match the approach
@@ -255,6 +272,9 @@ function makeCard(n) {
   if (DRINKS === 2) html += '<div class="drinkBox" style="display:none">' + itemsBlock("drink", n) + '</div>';
   card.innerHTML = html;
   card.querySelectorAll(".items").forEach(block => addItemRow(block));   // the first empty line
+  // Ticking Add or Replace changes the food and drink examples to match
+  card.querySelectorAll(".items").forEach(block =>
+    block.querySelectorAll('input[type="radio"]').forEach(r => r.addEventListener("change", () => foodEg(block))));
   const tick = card.querySelector(".pdrink");
   const drinkBox = card.querySelector(".drinkBox");
   if (tick && drinkBox) {
