@@ -69,17 +69,14 @@
   </div>
 
   <form id="form" style="display:none" autocomplete="on">
-    <!-- Instructions for the group leader; the last three paragraphs match the organiser's approach -->
+    <!-- Instructions for the group leader; the drinker sentence and the food and drink paragraphs follow the organiser's approach -->
     <div class="instr">
       <div class="instrHead">
         <h2>Instructions</h2>
         <button type="button" id="speak" class="speak" aria-label="Read the instructions aloud">🔊</button>
       </div>
-      <p>As the group leader/payer, your role for the app is to assist the organiser to enter details for the members of your group. What you complete on your phone will be sent to the organiser to check.</p>
-      <p>Please enter your first name and the first names of everyone in your group. The members of your group include anyone for whom you are paying, including yourself.</p>
-      <p>If your first name is the same as another group leader's, please enter another letter or character to make your name unique.</p>
-      <p id="instrTick" style="display:none"></p>
-      <p id="instrFood" style="display:none">Special food items can either replace the average share of the food bill, or they can be added to the average bill as appropriate.</p>
+      <p>As the group leader/payer, please enter your first name and the first names of each of the members for whom you will be paying. If your first name is the same as another group leader’s name, please add another letter or character to make your name unique.<span id="instrTick" style="display:none"> Tick the drinker box of any group member who was a drinker.</span> All this will help the organiser.</p>
+      <p id="instrFood" style="display:none">Please enter any special food amounts, the description of each food item, and whether the cost should replace the average food bill or be added to it. For example, if the member was the only person having a dessert, the cost should be added to the average food bill. If they had an entrée in place of a main, the amount should replace the average food bill.</p>
       <p id="instrDrink" style="display:none"></p>
     </div>
 
@@ -129,7 +126,7 @@
   <div id="result" class="msg" style="display:none"></div>
 
   <div class="note">
-    Your details are locked on this phone before they are sent, so only the organiser's app can read them. Even someone with a photo of the QR code can't unlock them.
+    Your details are encrypted before they are sent, so only the organiser's app can read them. Even someone with a photo of the QR code can't unlock them.
     The scrambled copy is deleted automatically within 1 hour.
     <a href="privacy.html">Privacy policy</a>
   </div>
@@ -335,23 +332,13 @@ function setup() {
   FOOD = !!invite.f;
   DRINKS = invite.d || 0;
   ASKS = FOOD || DRINKS >= 1;
-  // Instructions that match the approach
-  const todo = [];
-  if (DRINKS >= 1) todo.push("tick those who are drinkers");
-  if (FOOD && DRINKS === 2) todo.push("add any special food or drink items");
-  else if (FOOD) todo.push("add any special food items");
-  else if (DRINKS === 2) todo.push("add any special drink items");
-  if (todo.length) {
-    const p = document.getElementById("instrTick");
-    p.textContent = "After entering members’ first names, please " + todo.join(" and ") + ".";
-    p.style.display = "block";
-  }
-  if (FOOD) document.getElementById("instrFood").style.display = "block";
-  if (DRINKS === 2) {
+  // Instructions that match the approach: the drinker sentence, then the food and drink paragraphs
+  if (DRINKS >= 1) document.getElementById("instrTick").style.display = "inline";
+  if (FOOD || DRINKS === 2) {   // both paragraphs whenever special food or special drink items are asked for (drinks only if tracked)
+    document.getElementById("instrFood").style.display = "block";
     const p = document.getElementById("instrDrink");
-    p.textContent = (FOOD ? "Similarly, special" : "Special") +
-      " drink items can either replace the average share of the drinks bill, or they can be added to the average bill as seems fair.";
-    p.style.display = "block";
+    p.textContent = "Similarly, special drink items can either replace the average share of the drinks bill, or they can be added to it as seems fair.";
+    if (DRINKS >= 1) p.style.display = "block";   // left out when drinks aren't tracked at all
   }
   history.replaceState(null, "", location.pathname);
   // The email and mobile boxes appear only when that way of receiving the report is ticked
@@ -399,7 +386,7 @@ function setup() {
   btn.addEventListener("click", () => {
     if (s.speaking) { s.cancel(); btn.textContent = "🔊"; return; }
     const parts = ["Instructions."].concat(Array.from(document.querySelectorAll(".instr p"))
-      .filter(p => p.style.display !== "none").map(p => p.textContent));
+      .filter(p => p.style.display !== "none").map(p => p.innerText));   // innerText leaves out the hidden drinker sentence
     const voices = s.getVoices();
     const voice = voices.find(v => v.lang === "en-AU") || voices.find(v => v.lang.startsWith("en"));   // Australian first
     parts.forEach((text, i) => {
