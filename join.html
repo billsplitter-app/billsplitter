@@ -34,7 +34,7 @@
   .row .dollar { color:#c9b48a; }
   .row .amt { flex:0 0 32%; }
   .row .desc { flex:1; }
-  .row .desc::placeholder { font-size:14px; }   /* room for "eg entrée instead of main" */
+  .row .desc::placeholder { font-size:14px; }   /* room for "eg entrée, no main" */
   .choice .tick { margin-top:10px; font-size:15px; }
   .msg { margin-top:22px; padding:14px; border-radius:10px; text-align:center; }
   .ok { background:#1f4d2b; color:#d8f5df; }
@@ -219,8 +219,8 @@ function itemsBlock(kind, n) {
 }
 
 // The grey examples in the special food and drink description boxes follow the Add or Replace tick, as in the app.
-// Food, first item: "eg entrée instead of main" (Replace) or "eg entrée and main" (Add);
-// food, any further item: "eg dessert instead of main" or "eg dessert and main".
+// Food, first item: "eg entrée, no main" (Replace) or "eg entrée and main" (Add);
+// food, any further item: "eg dessert, no main" or "eg dessert and main".
 // Drinks, every item: "eg Coke only - no beer" (Replace) or "eg cocktail and the usual drinks" (Add).
 function foodEg(block) {
   const adding = block.querySelector('input[value="add"]').checked;
@@ -228,8 +228,8 @@ function foodEg(block) {
   block.querySelectorAll(".row .desc").forEach((d, k) => d.placeholder = drink
     ? (adding ? "eg cocktail and the usual drinks" : "eg Coke only - no beer")
     : k === 0
-      ? (adding ? "eg entrée and main" : "eg entrée instead of main")
-      : (adding ? "eg dessert and main" : "eg dessert instead of main"));
+      ? (adding ? "eg entrée and main" : "eg entrée, no main")
+      : (adding ? "eg dessert and main" : "eg dessert, no main"));
 }
 
 function addItemRow(block) {
