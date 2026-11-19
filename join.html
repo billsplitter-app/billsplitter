@@ -69,15 +69,13 @@
   </div>
 
   <form id="form" style="display:none" autocomplete="on">
-    <!-- Instructions for the group leader; the drinker sentence and the food and drink paragraphs follow the organiser's approach -->
+    <!-- Instructions for everyone; the group leader's own instructions are under Who you are paying for -->
     <div class="instr">
       <div class="instrHead">
         <h2>Instructions</h2>
         <button type="button" id="speak" class="speak" aria-label="Read the instructions aloud">🔊</button>
       </div>
-      <p>As the group leader/payer, please enter your first name and the first names of each of the members for whom you will be paying. If your first name is the same as another group leader’s name, please add another letter or character to make your name unique.<span id="instrTick" style="display:none"> Tick the drinker box of any group member who was a drinker.</span> All this will help the organiser.</p>
-      <p id="instrFood" style="display:none">Please enter any special food amounts, the description of each food item, and whether the cost should replace the average food bill or be added to it. For example, if the member was the only person having a dessert, the cost should be added to the average food bill. If they had an entrée in place of a main, the amount should replace the average food bill.</p>
-      <p id="instrDrink" style="display:none"></p>
+      <p>Please provide your first name and let me know if you are the person paying for the rest of the group.</p>
     </div>
 
     <label for="name">Your first name</label>
@@ -92,6 +90,7 @@
       <div class="hint" style="margin-top:8px;color:#ffb347">⚠️ Please check your group leader's first name carefully. It must be spelt exactly as they entered it, or you won't be added to their group.</div>
     </div>
 
+    <div id="receiveBox" style="display:none">   <!-- shown once Yes or No is answered -->
     <label>Would you like to receive your group invoice and report by email or SMS (or both)?</label>
     <div class="hint">If you do not want the organiser to have your email or phone number, the results are available in a QR code on the organiser's phone, which you can scan without providing any personal details.</div>
     <label class="tick"><input id="byEmail" type="checkbox"> By email</label>
@@ -105,9 +104,16 @@
       <label for="mobile">Your mobile number</label>
       <input id="mobile" name="mobile" type="tel" autocomplete="tel" maxlength="30">
     </div>
+    </div>
     
 
     <div id="payBox" style="display:none">
+    <!-- The group leader's instructions (shown after Yes); the drinker sentence and the food and drink paragraphs follow the organiser's approach -->
+    <div class="instr" style="margin-top:30px">
+      <p>As the group leader/payer, please enter your first name and the first names of each of the members for whom you will be paying. If your first name is the same as another group leader’s name, please add another letter or character to make your name unique.<span id="instrTick" style="display:none"> Tick the drinker box of any group member who was a drinker.</span> All this will help the organiser.</p>
+      <p id="instrFood" style="display:none">Please enter any special food amounts, the description of each food item, and whether the cost should replace the average food bill or be added to it. For example, if the member was the only person having a dessert, the cost should be added to the average food bill. If they had an entrée in place of a main, the amount should replace the average food bill.</p>
+      <p id="instrDrink" style="display:none"></p>
+    </div>
     <h2>Who you are paying for</h2>
     <div class="hint">You are number 1. Add the first name of each other person you are paying for. A new line appears as you fill each one. To remove someone, clear their name.</div>
     <div id="names">
@@ -121,6 +127,7 @@
     </div>
     <div id="people"></div>
 
+    <p id="checkNote" style="display:none; margin:24px 0 0; font-size:16px; line-height:1.45">Please check your entries for group members carefully before sending them to the organiser.</p>
     <button id="send" type="submit">Send to organiser</button>
   </form>
 
@@ -233,7 +240,7 @@ function foodEg(block) {
 function addItemRow(block) {
   const row = document.createElement("div");
   row.className = "row";
-  row.innerHTML = '<span class="dollar">$</span>' +
+  row.innerHTML =   // no currency sign: the page can't tell which currency the organiser uses
     '<input type="number" inputmode="decimal" step="0.01" min="0" class="amt" placeholder="Amount">' +
     '<input type="text" class="desc" maxlength="40">';
   row.querySelector(".desc").placeholder = block.dataset.eg;
@@ -361,6 +368,8 @@ function setup() {
     const no = payerAnswer() === "no";
     document.getElementById("leaderBox").style.display = no ? "block" : "none";
     document.getElementById("payBox").style.display = no ? "none" : "block";
+    document.getElementById("receiveBox").style.display = "block";   // either answer shows how to receive the report
+    document.getElementById("checkNote").style.display = no ? "none" : "block";   // only group leaders enter group members
     document.getElementById("detailsTitle").style.display = ASKS && !no ? "block" : "none";   // members don't fill in anyone's details
     sync();
   }));
@@ -387,7 +396,7 @@ function setup() {
   btn.addEventListener("click", () => {
     if (s.speaking) { s.cancel(); btn.textContent = "🔊"; return; }
     const parts = ["Instructions."].concat(Array.from(document.querySelectorAll(".instr p"))
-      .filter(p => p.style.display !== "none").map(p => p.innerText));   // innerText leaves out the hidden drinker sentence
+      .filter(p => p.offsetParent !== null).map(p => p.innerText));   // innerText leaves out the hidden drinker sentence
     const voices = s.getVoices();
     const voice = voices.find(v => v.lang === "en-AU") || voices.find(v => v.lang.startsWith("en"));   // Australian first
     parts.forEach((text, i) => {
