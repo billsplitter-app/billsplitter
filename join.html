@@ -32,8 +32,8 @@
   .itemsTitle { font-weight:600; }
   .row { display:flex; gap:8px; align-items:center; margin-top:10px; }
   .row .dollar { color:#c9b48a; }
-  .row .amt { flex:0 0 32%; }
-  .row .desc { flex:1; }
+  .row .amt { flex:1 1 0; min-width:0; }   /* equal halves: description left, amount right */
+  .row .desc { flex:1 1 0; min-width:0; }
   .row .desc::placeholder { font-size:14px; }   /* room for "eg entrée, no main" */
   .choice .tick { margin-top:10px; font-size:15px; }
   .msg { margin-top:22px; padding:14px; border-radius:10px; text-align:center; }
@@ -252,8 +252,8 @@ function addItemRow(block) {
   const row = document.createElement("div");
   row.className = "row";
   row.innerHTML =   // no currency sign: the page can't tell which currency the organiser uses
-    '<input type="number" inputmode="decimal" step="0.01" min="0" class="amt" placeholder="Amount">' +
-    '<input type="text" class="desc" maxlength="40">';
+    '<input type="text" class="desc" maxlength="40">' +   // description on the left, amount on the right, as in the app
+    '<input type="number" inputmode="decimal" step="0.01" min="0" class="amt" placeholder="Amount">';
   row.querySelector(".desc").placeholder = block.dataset.eg;
   const amt = row.querySelector(".amt");
   // Add or Replace appear once an amount or description is typed (Replace ticked first).
