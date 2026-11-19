@@ -75,27 +75,27 @@
         <h2>Instructions</h2>
         <button type="button" id="speak" class="speak" aria-label="Read the instructions aloud">🔊</button>
       </div>
-      <p>Please provide your first name and let me know if you are the person paying for the rest of the group.</p>
+      <p>Please provide your first name and let me know if someone else is paying for you.</p>
     </div>
 
     <label for="name">Your first name</label>
     <input id="name" name="name" type="text" autocomplete="given-name" autocorrect="off" spellcheck="false" autocapitalize="words" required maxlength="60">
 
-    <label>Are you the person paying for the rest of your group?</label>
+    <label>Is someone else paying for you?</label>
     <label class="tick"><input type="radio" name="payer" value="yes"> Yes</label>
     <label class="tick"><input type="radio" name="payer" value="no"> No</label>
     <div id="leaderBox" style="display:none">
-      <label for="leader">What is the first name of the group leader?</label>
+      <label for="leader">What is the first name of the person paying for you?</label>
       <input id="leader" type="text" maxlength="60" autocapitalize="words" autocorrect="off" spellcheck="false">
-      <div class="hint" style="margin-top:8px;color:#ffb347">⚠️ Please check your group leader's first name carefully. It must be spelt exactly as they entered it, or you won't be added to their group.</div>
+      <div class="hint" style="margin-top:8px;color:#ffb347">⚠️ Please check the first name of the person paying for you carefully. It must be spelt exactly as they entered it, or you won't be added to their group.</div>
     </div>
 
     <div id="receiveBox" style="display:none">   <!-- shown once Yes or No is answered -->
-    <label>Would you like to receive your group invoice and report by email or SMS (or both)?</label>
+    <label>Would you like to receive your <span class="grp">group </span>invoice and report by email or SMS (or both)?</label>   <!-- "group" only when there is more than one person -->
     <div class="hint">If you do not want the organiser to have your email or phone number, the results are available in a QR code on the organiser's phone, which you can scan without providing any personal details.</div>
     <label class="tick"><input id="byEmail" type="checkbox"> By email</label>
     <label class="tick"><input id="bySms" type="checkbox"> By SMS</label>
-    <label class="tick"><input id="byQr" type="checkbox"> Neither, I wish to receive my group report via a QR code on the organiser's phone</label>
+    <label class="tick"><input id="byQr" type="checkbox"> Neither, I wish to receive my <span class="grp">group </span>report via a QR code on the organiser's phone</label>
     <div id="emailBox" style="display:none">
       <label for="email">Your email address</label>
       <input id="email" name="email" type="email" autocomplete="email" maxlength="100">
@@ -110,7 +110,7 @@
     <div id="payBox" style="display:none">
     <!-- The group leader's instructions (shown after Yes); the drinker sentence and the food and drink paragraphs follow the organiser's approach -->
     <div class="instr" style="margin-top:30px">
-      <p>As the group leader/payer, please enter your first name and the first names of each of the members for whom you will be paying. If your first name is the same as another group leader’s name, please add another letter or character to make your name unique.<span id="instrTick" style="display:none"> Tick the drinker box of any group member who was a drinker.</span> All this will help the organiser.</p>
+      <p>As the payer, please enter your first name and the first names of each of the members you will be paying for. If your first name is the same as another payer’s name, please add another letter or character to make your name unique.<span id="instrTick" style="display:none"> Tick the drinker box of any group member who was a drinker.</span> All this will help the organiser.</p>
       <p id="instrFood" style="display:none">Please enter any special food amounts, the description of each food item, and whether the cost should replace the average food bill or be added to it. For example, if the member was the only person having a dessert, the cost should be added to the average food bill. If they had an entrée in place of a main, the amount should replace the average food bill.</p>
       <p id="instrDrink" style="display:none"></p>
     </div>
@@ -201,7 +201,9 @@ function leaderName() { return document.getElementById("name").value.trim(); }
 function nameOf(e) { return e.input ? e.input.value.trim() : leaderName(); }
 // Yes, No, or "" when not yet answered
 function payerAnswer() { const r = document.querySelector('input[name="payer"]:checked'); return r ? r.value : ""; }
-function isPayer() { return payerAnswer() === "yes"; }   // nothing about the group is asked until they answer Yes
+function isPayer() { return payerAnswer() === "no"; }   // No to "Is someone else paying for you?": they are a payer
+// More than one person: someone is paying for them, or they are paying for at least one other person
+function isGroup() { return payerAnswer() === "yes" || (isPayer() && entries.some(e => e.input && nameOf(e))); }
 
 // The same questions as the app: Add or Replace, then amount and description lines
 function itemsBlock(kind, n) {
@@ -297,8 +299,10 @@ function sync() {
   entries.forEach(e => {
     const n = nameOf(e);
     e.card.querySelector(".who").textContent = e.input ? n : (me ? me + " (you)" : "You");
-    e.card.style.display = ASKS && isPayer() && (!e.input || n) ? "block" : "none";   // only group leaders fill in details
+    e.card.style.display = ASKS && isPayer() && (!e.input || n) ? "block" : "none";   // only payers fill in details
   });
+  // "your group invoice" and "my group report" only for more than one person
+  document.querySelectorAll(".grp").forEach(s => s.style.display = isGroup() ? "inline" : "none");
 }
 
 // The growing list: a new empty name line appears once the last one is filled
@@ -363,13 +367,16 @@ function setup() {
     ["byEmail", "bySms"].forEach(id => document.getElementById(id).checked = false);
     ["emailBox", "smsBox"].forEach(id => document.getElementById(id).style.display = "none");
   });
-  // Paying for the group? No shows the group leader's name box and hides Who you are paying for
+  // Someone else paying for you? Yes shows the payer's name box and hides Who you are paying for
   document.querySelectorAll('input[name="payer"]').forEach(r => r.addEventListener("change", () => {
-    const no = payerAnswer() === "no";
+    const no = payerAnswer() === "yes";   // someone else is paying for them: not a payer
     document.getElementById("leaderBox").style.display = no ? "block" : "none";
     document.getElementById("payBox").style.display = no ? "none" : "block";
-    document.getElementById("receiveBox").style.display = "block";   // either answer shows how to receive the report
-    document.getElementById("checkNote").style.display = no ? "none" : "block";   // only group leaders enter group members
+    const receive = document.getElementById("receiveBox");
+    receive.style.display = "block";   // either answer shows how to receive the report
+    // Payers answer it under their list of names; anyone being paid for, under the payer's name
+    if (no) document.getElementById("leaderBox").after(receive); else document.getElementById("payBox").after(receive);
+    document.getElementById("checkNote").style.display = no ? "none" : "block";   // only payers enter group members
     document.getElementById("detailsTitle").style.display = ASKS && !no ? "block" : "none";   // members don't fill in anyone's details
     sync();
   }));
@@ -440,10 +447,10 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
   try {
     const leader = leaderName();
     if (!leader) throw new Error("Please enter your first name.");
-    if (!payerAnswer()) throw new Error("Please say whether you are paying for the rest of your group.");
+    if (!payerAnswer()) throw new Error("Please say whether someone else is paying for you.");
     const payer = isPayer();
     const leaderOf = payer ? "" : document.getElementById("leader").value.trim();
-    if (!payer && !leaderOf) throw new Error("Please enter the first name of your group leader.");
+    if (!payer && !leaderOf) throw new Error("Please enter the first name of the person paying for you.");
     const emailOn = document.getElementById("byEmail").checked;
     const smsOn = document.getElementById("bySms").checked;
     const email = emailOn ? document.getElementById("email").value.trim() : "";
