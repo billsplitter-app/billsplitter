@@ -16,7 +16,7 @@
     width:100%; box-sizing:border-box; padding:13px; font-size:17px;
     border-radius:10px; border:1px solid #8a6d35; background:#fffbe8; color:#222; }
   .tick { display:flex; align-items:center; gap:12px; margin-top:16px; font-size:17px; font-weight:400; }
-  .tick input { width:26px; height:26px; margin:0; }
+  .tick input { width:26px; height:26px; margin:0; flex:none; }   /* never squeezed smaller by long words beside it */
   button { width:100%; margin-top:30px; padding:15px; font-size:18px; font-weight:700;
     border:none; border-radius:12px; background:#e8c46a; color:#1a1410; }
   button:disabled { opacity:.5; }
@@ -75,13 +75,13 @@
         <h2>Instructions</h2>
         <button type="button" id="speak" class="speak" aria-label="Read the instructions aloud">🔊</button>
       </div>
-      <p>Please provide your first name and let me know if someone else is paying for you.</p>
+      <p>Please type your first name in the box below.</p>
     </div>
 
     <label for="name">Your first name</label>
     <input id="name" name="name" type="text" autocomplete="given-name" autocorrect="off" spellcheck="false" autocapitalize="words" required maxlength="60">
 
-    <label>Is someone else paying for you?</label>
+    <label>Are you paying for yourself or others?</label>   <!-- Yes: a payer. No: someone else pays for them -->
     <label class="tick"><input type="radio" name="payer" value="yes"> Yes</label>
     <label class="tick"><input type="radio" name="payer" value="no"> No</label>
     <div id="leaderBox" style="display:none">
@@ -91,9 +91,9 @@
     </div>
 
     <div id="othersBox" style="display:none">   <!-- payers only: on their own, or paying for others too? -->
-      <label>Are you paying for anyone else?</label>
-      <label class="tick"><input type="radio" name="others" value="yes"> Yes</label>
-      <label class="tick"><input type="radio" name="others" value="no"> No</label>
+      <label>Are you only paying for yourself?</label>   <!-- Yes: an individual. No: paying for a group -->
+      <label class="tick"><input type="radio" name="only" value="yes"> Yes</label>
+      <label class="tick"><input type="radio" name="only" value="no"> No</label>
     </div>
 
     <div id="receiveBox" style="display:none">   <!-- shown once Yes or No is answered -->
@@ -208,11 +208,13 @@ function leaderName() { return document.getElementById("name").value.trim(); }
 function nameOf(e) { return e.input ? e.input.value.trim() : leaderName(); }
 // Yes, No, or "" when not yet answered
 function payerAnswer() { const r = document.querySelector('input[name="payer"]:checked'); return r ? r.value : ""; }
-function isPayer() { return payerAnswer() === "no"; }   // No to "Is someone else paying for you?": they are a payer
+function isPayer() { return payerAnswer() === "yes"; }   // Yes to "Are you paying for yourself or others?": they are a payer
+function isPaidFor() { return payerAnswer() === "no"; }   // No: someone else is paying for them
 // More than one person: someone is paying for them, or they are paying for at least one other person
-// Payers only: Yes, No, or "" to "Are you paying for anyone else?"
-function othersAnswer() { const r = document.querySelector('input[name="others"]:checked'); return isPayer() && r ? r.value : ""; }
-function isGroup() { return payerAnswer() === "yes" || othersAnswer() === "yes"; }
+// Payers only: is anyone else included? "yes" (a group), "no" (just themselves) or "" (not answered),
+// from "Are you only paying for yourself?" (Yes = just themselves)
+function othersAnswer() { const r = document.querySelector('input[name="only"]:checked'); return isPayer() && r ? (r.value === "yes" ? "no" : "yes") : ""; }
+function isGroup() { return isPaidFor() || othersAnswer() === "yes"; }
 
 // The same questions as the app: Add or Replace, then amount and description lines
 function itemsBlock(kind, n) {
@@ -381,7 +383,7 @@ function setup() {
   //   paying just for themselves      -> how to receive the report, then their own details
   //   paying for others too           -> the payer instructions and names, how to receive the report, then each person's details
   function layout() {
-    const paid = payerAnswer() === "yes";
+    const paid = isPaidFor();
     const others = othersAnswer();
     const show = (id, on) => document.getElementById(id).style.display = on ? "block" : "none";
     show("leaderBox", paid);
@@ -398,7 +400,7 @@ function setup() {
     document.getElementById("detailsHint").textContent = others === "no" ? HINT_ME : HINT_GROUP;
     sync();
   }
-  document.querySelectorAll('input[name="payer"], input[name="others"]').forEach(r => r.addEventListener("change", layout));
+  document.querySelectorAll('input[name="payer"], input[name="only"]').forEach(r => r.addEventListener("change", layout));
   // What each person's card asks, to match the approach
   const asks = [], mine = [];
   if (DRINKS >= 1) { asks.push("tick each person who is drinking"); mine.push("tick Drinker if you are drinking"); }
@@ -468,11 +470,11 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
   try {
     const leader = leaderName();
     if (!leader) throw new Error("Please enter your first name.");
-    if (!payerAnswer()) throw new Error("Please say whether someone else is paying for you.");
+    if (!payerAnswer()) throw new Error("Please say whether you are paying for yourself or others.");
     const payer = isPayer();
     const leaderOf = payer ? "" : document.getElementById("leader").value.trim();
     if (!payer && !leaderOf) throw new Error("Please enter the first name of the person paying for you.");
-    if (payer && !othersAnswer()) throw new Error("Please say whether you are paying for anyone else.");
+    if (payer && !othersAnswer()) throw new Error("Please say whether you are only paying for yourself.");
     const emailOn = document.getElementById("byEmail").checked;
     const smsOn = document.getElementById("bySms").checked;
     const email = emailOn ? document.getElementById("email").value.trim() : "";
