@@ -560,7 +560,9 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
 
     document.getElementById("form").style.display = "none";
     result.className = "msg ok";
-    result.textContent = "Done! Your group has been sent to the organiser, who will check it. You can close this page.";
+    result.textContent = payer && othersAnswer() === "yes"
+      ? "Done! Your group has been sent to the organiser, who will check it. You can close this page."
+      : "Done. Your details have been sent to the organiser, who will check them. You can close this page.";
     result.style.display = "block";
   } catch (e) {
     result.className = "msg err";
