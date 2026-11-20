@@ -68,6 +68,10 @@
     This invite link is incomplete or has expired. Please ask the organiser to show the QR code again.
   </div>
 
+  <div id="old" class="msg err" style="display:none">
+    This QR code has expired. Please ask the organiser to show the new one.
+  </div>
+
   <form id="form" style="display:none" autocomplete="on">
     <!-- Instructions for everyone; the group leader's own instructions are under Who you are paying for -->
     <div class="instr">
@@ -170,6 +174,10 @@ function readInvite(bytes) {
   } catch (e) { return null; }
 }
 if (!LOCKED) { try { invite = readInvite(fromB64url(RAW)); } catch (e) { invite = null; } }
+// The QR code's closing time has passed (2 minutes allowed for the phones' clocks differing).
+// Older QR codes without a closing time are let through.
+const OLD = "This QR code has expired. Please ask the organiser to show the new one.";
+function isOld(v) { return !!(v && v.x && Date.now() > v.x * 1000 + 2 * 60 * 1000); }
 
 // Unlocks password-protected details: the password is stretched into a key in the same way as the app
 async function unlock(sealedText, pin) {
@@ -449,7 +457,8 @@ if (LOCKED) {
     try { invite = readInvite(await unlock(RAW, pw)); } catch (e) { invite = null; }
     if (invite) {
       document.getElementById("pinBox").style.display = "none";
-      setup();
+      if (isOld(invite)) document.getElementById("old").style.display = "block";
+      else setup();
     } else {
       document.getElementById("pinErr").style.display = "block";
       box.value = "";
@@ -458,6 +467,8 @@ if (LOCKED) {
   });
 } else if (!invite) {
   document.getElementById("bad").style.display = "block";
+} else if (isOld(invite)) {
+  document.getElementById("old").style.display = "block";
 } else {
   setup();
 }
@@ -469,6 +480,7 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
   btn.disabled = true; btn.textContent = "Sending…";
   try {
     const leader = leaderName();
+    if (isOld(invite)) throw new Error(OLD);   // the page was left open after the QR code closed
     if (!leader) throw new Error("Please enter your first name.");
     if (!payerAnswer()) throw new Error("Please say whether you are paying for yourself or others.");
     const payer = isPayer();
