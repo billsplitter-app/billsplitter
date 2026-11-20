@@ -178,6 +178,18 @@ if (!LOCKED) { try { invite = readInvite(fromB64url(RAW)); } catch (e) { invite 
 // Older QR codes without a closing time are let through.
 const OLD = "This QR code has expired. Please ask the organiser to show the new one.";
 function isOld(v) { return !!(v && v.x && Date.now() > v.x * 1000 + 2 * 60 * 1000); }
+// The organiser has started a new outing (or Reset or Clear): this QR code is closed on the server
+function showOld() {
+  document.getElementById("form").style.display = "none";
+  document.getElementById("result").style.display = "none";
+  document.getElementById("old").style.display = "block";
+}
+async function checkClosed() {
+  try {
+    const res = await fetch(WORKER + "/status?id=" + encodeURIComponent(invite.i), { cache: "no-store" });
+    if ((await res.json()).closed) showOld();
+  } catch (e) {}   // no answer: the form stays, and Send checks again
+}
 
 // Unlocks password-protected details: the password is stretched into a key in the same way as the app
 async function unlock(sealedText, pin) {
@@ -458,7 +470,7 @@ if (LOCKED) {
     if (invite) {
       document.getElementById("pinBox").style.display = "none";
       if (isOld(invite)) document.getElementById("old").style.display = "block";
-      else setup();
+      else { setup(); checkClosed(); }
     } else {
       document.getElementById("pinErr").style.display = "block";
       box.value = "";
@@ -471,6 +483,7 @@ if (LOCKED) {
   document.getElementById("old").style.display = "block";
 } else {
   setup();
+  checkClosed();
 }
 
 document.getElementById("form").addEventListener("submit", async (ev) => {
@@ -550,6 +563,7 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
     }
     if (!res) throw new Error("Couldn't reach the organiser's server (" + lastError +
       "). Please check this phone's internet connection. If a VPN is switched on, try turning it off, then tap Send to organiser again.");
+    if (res.status === 410) { showOld(); return; }   // closed since the page opened
     if (!res.ok) {
       const info = await res.json().catch(() => ({}));
       throw new Error(res.status === 429
