@@ -85,6 +85,7 @@
     <label for="name">Your first name</label>
     <input id="name" name="name" type="text" autocomplete="given-name" autocorrect="off" spellcheck="false" autocapitalize="words" required maxlength="60">
     <div id="nameHint" class="hint" style="margin-top:8px; display:none">If your first name is the same as another payer’s name, please add another letter or character to make your name unique.</div>
+    <div id="memberHint" class="hint" style="margin-top:8px; display:none">If someone else in your group has the same first name as you, please add another letter or character to make your name unique.</div>
 
     <label>Are you paying?</label>   <!-- one question: paying for themselves only, for a group, or paid for by someone else -->
     <label class="tick"><input type="radio" name="payer" value="self"> Yes, I'm paying for myself only</label>
@@ -408,6 +409,7 @@ function setup() {
     const show = (id, on) => document.getElementById(id).style.display = on ? "block" : "none";
     show("leaderBox", paid);
     show("nameHint", isPayer());   // the unique-name note matters only to payers
+    show("memberHint", paid);      // and its own version for someone being paid for
     show("payBox", others === "yes");
     const receive = document.getElementById("receiveBox");
     show("receiveBox", paid || others !== "");
